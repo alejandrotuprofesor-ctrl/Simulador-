@@ -68,12 +68,11 @@ canvas {
 #result-screen.active {
     justify-content: flex-start;
     align-items: center;
-    padding-top: 0;
     height: 100%;
     pointer-events: none;
 }
 
-#result-screen .glass-panel {
+#result-screen .hud-top {
     width: 100%;
     max-width: none;
     height: auto;
@@ -89,15 +88,30 @@ canvas {
     border-top: none;
     position: absolute;
     top: 0;
+    z-index: 20;
 }
 
-#result-screen .options-grid {
+#result-screen .hud-instructions {
+    position: absolute;
+    top: 55px; /* Reduced to bring it closer to the top HUD */
+    width: 500px;
+    max-width: 90%;
+    padding: 1.2rem;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+#result-screen #visual-summary {
     display: flex;
     flex-wrap: nowrap;
     justify-content: center;
     gap: 0.5rem;
     margin-top: 0;
     overflow-x: auto;
+    width: 100%;
 }
 
 @keyframes fadeInScale {
@@ -119,18 +133,45 @@ canvas {
     position: relative;
     overflow: hidden;
     transition: all 0.2s ease;
-    margin-top: 2rem;
+    margin-top: 1rem; /* Reduced from 2rem to join with text above */
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
 }
 
-#btn-restart {
+.result-actions {
     position: absolute;
-    bottom: 40px;
-    right: 40px;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 1.5rem;
+    pointer-events: auto;
+    width: auto;
+    justify-content: center;
+}
+
+#btn-restart {
     margin-top: 0;
     font-size: 0.9rem;
-    padding: 0.6rem 1.5rem;
+    padding: 0.6rem 2rem;
+}
+
+#btn-results-back {
+    margin-top: 0;
+    font-size: 0.9rem;
+    padding: 0.6rem 2rem;
+}
+
+.btn-futuristic.secondary {
+    border-color: var(--neon-purple);
+    color: var(--neon-purple);
+    box-shadow: 0 0 10px rgba(188, 19, 254, 0.2);
+}
+
+.btn-futuristic.secondary:hover {
+    background: var(--neon-purple);
+    color: #fff;
+    box-shadow: 0 0 25px var(--neon-purple);
 }
 
 #btn-restart:hover {
@@ -273,10 +314,10 @@ canvas {
 
 #sim-instructions {
     background: rgba(0, 0, 0, 0.4);
-    padding: 1rem;
+    padding: 0.8rem 1rem;
     border-radius: 10px;
     border-left: 3px solid var(--neon-purple);
-    margin-bottom: 2rem !important;
+    margin-bottom: 0.8rem !important; /* Reduced from 2rem to join with buttons */
 }
 
 #instr-title {
@@ -284,6 +325,8 @@ canvas {
     margin: 0 0 0.5rem 0;
     text-transform: uppercase;
     letter-spacing: 2px;
+    color: var(--neon-purple);
+    text-shadow: 0 0 10px var(--neon-purple);
 }
 
 #instr-desc {
@@ -332,11 +375,83 @@ canvas {
     to { transform: translateY(0); opacity: 1; }
 }
 
-/* Footer */
-.footer-info {
+/* Responsive & Mobile Controls */
+.mobile-only {
+    display: none;
     position: absolute;
-    bottom: 20px;
-    font-size: 0.7rem;
-    opacity: 0.5;
-    letter-spacing: 1px;
+    bottom: 120px;
+    width: 100%;
+    pointer-events: none;
+    z-index: 30;
+}
+
+body.is-mobile .mobile-only {
+    display: flex;
+    justify-content: center;
+}
+
+.touch-group {
+    display: flex;
+    gap: 1rem;
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1rem;
+    border-radius: 50px;
+    backdrop-filter: blur(5px);
+    border: 1px solid var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+}
+
+.touch-group.d-pad {
+    flex-direction: column;
+    align-items: center;
+    border-radius: 20px;
+    padding: 0.8rem;
+}
+
+.touch-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(0, 243, 255, 0.1);
+    border: 2px solid var(--neon-blue);
+    color: var(--neon-blue);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.1s ease;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+}
+
+.touch-btn:active {
+    background: var(--neon-blue);
+    color: #000;
+    transform: scale(0.9);
+    box-shadow: 0 0 20px var(--neon-blue);
+}
+
+@media (max-width: 768px) {
+    #result-screen .hud-instructions {
+        top: 65px;
+        width: 95%;
+        padding: 0.8rem;
+    }
+    
+    .result-actions {
+        bottom: 20px;
+        gap: 0.8rem;
+    }
+    
+    #btn-restart, #btn-results-back {
+        padding: 0.5rem 1rem;
+        font-size: 0.8rem;
+    }
+
+    .mobile-only {
+        bottom: 100px;
+    }
 }

@@ -41,25 +41,52 @@
 
         <!-- Pantalla Final / Resumen Visual -->
         <section id="result-screen" class="screen">
-            <div class="glass-panel">
-                <h2 style="color: var(--neon-blue); letter-spacing: 3px;">CONFIGURACIÓN FINAL</h2>
-                <div id="visual-summary" style="margin-top: 2rem;">
+            <!-- Barra Superior: Resumen de Configuración -->
+            <div class="glass-panel hud-top">
+                <div id="visual-summary">
                     <!-- Data-driven HUD components -->
                 </div>
+            </div>
 
-                <!-- HUD DE SIMULACIÓN GUIADA -->
-                <div id="sim-hud" style="display: none; margin-top: 1.5rem; border-top: 1px solid rgba(0, 243, 255, 0.2); padding-top: 1.5rem;">
-                    <div id="sim-instructions" style="text-align: center; margin-bottom: 1.5rem;">
-                        <h3 id="instr-title" style="color: var(--neon-purple); text-shadow: 0 0 10px var(--neon-purple);">Paso 1: Ángulo de Trabajo</h3>
-                        <p id="instr-desc" class="hud-text">Usa <b>Z</b> y <b>X</b> para ajustar el ángulo lateral del electrodo hasta que el indicador esté en verde.</p>
-                    </div>
-                    <div id="sim-controls" style="display: flex; gap: 1rem; justify-content: center;">
-                        <button id="btn-next-step" class="btn-futuristic" style="font-size: 0.9rem; padding: 0.6rem 1.5rem; background: rgba(188, 19, 254, 0.2);">SIGUIENTE PASO</button>
-                        <button id="btn-start-weld" class="btn-futuristic" style="display: none; font-size: 0.9rem; padding: 0.6rem 1.5rem; border-color: #ff4444; color: #ff4444; background: rgba(255, 68, 68, 0.1);">EMPEZAR A SOLDAR</button>
-                    </div>
+            <!-- Panel de Instrucciones: Pasos de Simulación -->
+            <div id="sim-hud" class="glass-panel hud-instructions" style="display: none;">
+                <div id="sim-instructions">
+                    <h3 id="instr-title">Paso 1: Ángulo de Trabajo</h3>
+                    <p id="instr-desc" class="hud-text">Usa <b>Z</b> y <b>X</b> para ajustar el ángulo lateral del electrodo hasta que el indicador esté en verde.</p>
                 </div>
+                <div id="sim-controls">
+                    <button id="btn-next-step" class="btn-futuristic">SIGUIENTE PASO</button>
+                    <button id="btn-start-weld" class="btn-futuristic">EMPEZAR A SOLDAR</button>
+                </div>
+            </div>
 
-                <button id="btn-restart" class="btn-futuristic" style="font-size: 1rem; padding: 0.8rem 2rem; margin-top: 2rem;">NUEVA SIMULACIÓN</button>
+            <!-- CONTROLES TÁCTILES (Móvil) -->
+            <div id="mobile-controls" class="mobile-only">
+                <div id="ctrl-rotation" class="touch-group" style="display: none;">
+                    <button class="touch-btn" data-key="z">↺</button>
+                    <button class="touch-btn" data-key="x">↻</button>
+                </div>
+                <div id="ctrl-lead-rotation" class="touch-group" style="display: none;">
+                    <button class="touch-btn" data-key="c">⤹</button>
+                    <button class="touch-btn" data-key="v">⤸</button>
+                </div>
+                <div id="ctrl-distance" class="touch-group" style="display: none;">
+                    <button class="touch-btn" data-key="q">↑</button>
+                    <button class="touch-btn" data-key="e">↓</button>
+                </div>
+                <div id="ctrl-position" class="touch-group d-pad" style="display: none;">
+                    <button class="touch-btn" data-key="w">▲</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="touch-btn" data-key="a">◀</button>
+                        <button class="touch-btn" data-key="d">▶</button>
+                    </div>
+                    <button class="touch-btn" data-key="s">▼</button>
+                </div>
+            </div>
+
+            <div class="result-actions">
+                <button id="btn-results-back" class="btn-futuristic secondary">VOLVER</button>
+                <button id="btn-restart" class="btn-futuristic">NUEVA SIMULACIÓN</button>
             </div>
         </section>
 
