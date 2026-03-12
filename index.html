@@ -60,27 +60,15 @@
                 </div>
             </div>
 
-            <!-- CONTROLES TÁCTILES (Móvil) -->
+            <!-- CONTROLES TÁCTILES (Móvil) - Joystick Proporcional -->
             <div id="mobile-controls" class="mobile-only">
-                <div id="ctrl-rotation" class="touch-group" style="display: none;">
-                    <button class="touch-btn" data-key="z">↺</button>
-                    <button class="touch-btn" data-key="x">↻</button>
-                </div>
-                <div id="ctrl-lead-rotation" class="touch-group" style="display: none;">
-                    <button class="touch-btn" data-key="c">⤹</button>
-                    <button class="touch-btn" data-key="v">⤸</button>
-                </div>
-                <div id="ctrl-distance" class="touch-group" style="display: none;">
-                    <button class="touch-btn" data-key="q">↑</button>
-                    <button class="touch-btn" data-key="e">↓</button>
-                </div>
-                <div id="ctrl-position" class="touch-group d-pad" style="display: none;">
-                    <button class="touch-btn" data-key="w">▲</button>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="touch-btn" data-key="a">◀</button>
-                        <button class="touch-btn" data-key="d">▶</button>
+                <div id="universal-joystick" class="joystick-container">
+                    <div class="joystick-center-line"></div>
+                    <div class="joystick-arrows">
+                        <span>◀</span>
+                        <span>▶</span>
                     </div>
-                    <button class="touch-btn" data-key="s">▼</button>
+                    <div id="joystick-knob" class="joystick-knob"></div>
                 </div>
             </div>
 

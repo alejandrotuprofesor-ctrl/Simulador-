@@ -93,15 +93,20 @@ canvas {
 
 #result-screen .hud-instructions {
     position: absolute;
-    top: 55px; /* Reduced to bring it closer to the top HUD */
-    width: 500px;
-    max-width: 90%;
-    padding: 1.2rem;
+    top: 60px; /* Aligned below the top HUD bar */
+    width: 95%; /* Use full width for the bar */
+    max-width: 1000px;
+    padding: 0.4rem 1rem;
     pointer-events: auto;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* Horizontal layout */
     align-items: center;
-    text-align: center;
+    justify-content: center;
+    text-align: left;
+    background: rgba(10, 10, 15, 0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
 }
 
 #result-screen #visual-summary {
@@ -313,41 +318,44 @@ canvas {
 }
 
 #sim-instructions {
-    background: rgba(0, 0, 0, 0.4);
-    padding: 0.8rem 1rem;
-    border-radius: 10px;
-    border-left: 3px solid var(--neon-purple);
-    margin-bottom: 0.8rem !important; /* Reduced from 2rem to join with buttons */
+    background: transparent;
+    padding: 0;
+    border-left: none;
+    margin-bottom: 0 !important;
+    flex: 1; /* Take remaining space */
 }
 
 #instr-title {
-    font-size: 1.1rem;
-    margin: 0 0 0.5rem 0;
+    font-size: 0.8rem;
+    margin: 0 0.5rem 0 0;
+    display: inline-block;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     color: var(--neon-purple);
-    text-shadow: 0 0 10px var(--neon-purple);
+    text-shadow: 0 0 5px var(--neon-purple);
 }
 
 #instr-desc {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     margin: 0;
-    line-height: 1.4;
-    color: #bbb;
+    display: inline-block;
+    color: #eee;
 }
 
 #sim-controls {
     display: flex;
-    gap: 1.5rem;
-    justify-content: center;
+    gap: 0.8rem;
+    justify-content: flex-end;
+    align-items: center;
 }
 
 #btn-next-step {
     border-color: var(--neon-purple);
     color: var(--neon-purple);
-    font-size: 0.8rem;
-    padding: 0.8rem 2rem;
-    box-shadow: 0 0 10px rgba(188, 19, 254, 0.2);
+    font-size: 0.7rem;
+    padding: 0.4rem 1.2rem;
+    margin-top: 0;
+    box-shadow: 0 0 10px rgba(188, 19, 254, 0.1);
 }
 
 #btn-next-step:hover {
@@ -359,9 +367,10 @@ canvas {
 #btn-start-weld {
     border-color: #ff4444;
     color: #ff4444;
-    font-size: 0.8rem;
-    padding: 0.8rem 2rem;
-    box-shadow: 0 0 10px rgba(255, 68, 68, 0.2);
+    font-size: 0.7rem;
+    padding: 0.4rem 1.2rem;
+    margin-top: 0;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.1);
 }
 
 #btn-start-weld:hover {
@@ -453,5 +462,58 @@ body.is-mobile .mobile-only {
 
     .mobile-only {
         bottom: 100px;
+    }
+
+    /* Joystick Proporcional */
+    .joystick-container {
+        width: 90%;
+        max-width: 600px;
+        height: 60px;
+        background: rgba(0, 0, 0, 0.4);
+        border: 2px solid var(--neon-blue);
+        border-radius: 30px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
+        touch-action: none; /* Crucial para evitar scroll al tocar */
+    }
+
+    .joystick-knob {
+        width: 50px;
+        height: 50px;
+        background: var(--neon-blue);
+        border-radius: 50%;
+        box-shadow: 0 0 15px var(--neon-blue);
+        cursor: pointer;
+        position: absolute;
+        left: calc(50% - 25px); /* Centro dinámico */
+        transition: transform 0.1s ease-out;
+        z-index: 5;
+    }
+
+    .joystick-center-line {
+        position: absolute;
+        width: 2px;
+        height: 30px;
+        background: rgba(0, 243, 255, 0.3);
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .joystick-arrows {
+        position: absolute;
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 20px;
+        box-sizing: border-box;
+        font-size: 1.2rem;
+        color: var(--neon-blue);
+        opacity: 0.5;
+        pointer-events: none;
     }
 }

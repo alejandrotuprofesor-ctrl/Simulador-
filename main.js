@@ -68,29 +68,14 @@ function initUI() {
         btnStartWeld: document.getElementById('btn-start-weld'),
         // Mobile containers
         mobileControls: document.getElementById('mobile-controls'),
-        ctrlRotation: document.getElementById('ctrl-rotation'),
-        ctrlLeadRotation: document.getElementById('ctrl-lead-rotation'),
-        ctrlDistance: document.getElementById('ctrl-distance'),
-        ctrlPosition: document.getElementById('ctrl-position')
+        joystickKnob: document.getElementById('joystick-knob'),
+        universalJoystick: document.getElementById('universal-joystick')
     };
 
-    // Mobile buttons events
-    document.querySelectorAll('.touch-btn').forEach(btn => {
-        const key = btn.getAttribute('data-key');
-        const startEvent = 'ontouchstart' in window ? 'touchstart' : 'mousedown';
-        const endEvent = 'ontouchend' in window ? 'touchend' : 'mouseup';
+    // Initialize Proportional Joystick
+    if (ui.universalJoystick) initJoystick();
 
-        btn.addEventListener(startEvent, (e) => {
-            e.preventDefault();
-            keysPressed[key] = true;
-        });
-        btn.addEventListener(endEvent, (e) => {
-            e.preventDefault();
-            keysPressed[key] = false;
-        });
-        // Mouse leave as safety
-        btn.addEventListener('mouseleave', () => keysPressed[key] = false);
-    });
+
 
     if (ui.btnStart) {
         ui.btnStart.addEventListener('click', (e) => {
@@ -110,11 +95,7 @@ function initUI() {
 
     if (ui.btnBack) ui.btnBack.addEventListener('click', goBack);
     if (ui.btnRestart) ui.btnRestart.addEventListener('click', () => location.reload());
-    if (ui.btnResultsBack) ui.btnResultsBack.addEventListener('click', () => {
-        // Volver a la pantalla de preguntas
-        switchView(ui.questionScreen);
-        goBack(); // Usar la lógica de retroceso existente
-    });
+    if (ui.btnResultsBack) ui.btnResultsBack.addEventListener('click', prevSimStep);
 
     if (ui.btnNextStep) ui.btnNextStep.addEventListener('click', nextSimStep);
     
@@ -135,6 +116,20 @@ function nextSimStep() {
     else if (currentSimState === SIM_STATES.READY) setSimState(SIM_STATES.WELDING);
 }
 
+function prevSimStep() {
+    if (currentSimState === SIM_STATES.WELDING) setSimState(SIM_STATES.READY);
+    else if (currentSimState === SIM_STATES.READY) setSimState(SIM_STATES.DISTANCE);
+    else if (currentSimState === SIM_STATES.DISTANCE) setSimState(SIM_STATES.TRABAJO);
+    else if (currentSimState === SIM_STATES.TRABAJO) setSimState(SIM_STATES.AVANCE);
+    else if (currentSimState === SIM_STATES.AVANCE) setSimState(SIM_STATES.POSITION);
+    else if (currentSimState === SIM_STATES.POSITION) setSimState(SIM_STATES.START);
+    else if (currentSimState === SIM_STATES.START) {
+        // Al estar en START (resumen), VOLVER nos saca a las preguntas
+        switchView(ui.questionScreen);
+        goBack(); 
+    }
+}
+
 // Variables para animación de cámara
 let targetCamPos = new THREE.Vector3(5, 5, 5);
 let targetLookAt = new THREE.Vector3(0, 0, 0);
@@ -148,87 +143,79 @@ function setSimState(newState) {
     const isT = pieceContainer?.userData.isTJoint;
     
     // Ocultar todos los grupos móviles por defecto
-    if (ui.mobileControls) {
-        ui.ctrlRotation.style.display = 'none';
-        ui.ctrlLeadRotation.style.display = 'none';
-        ui.ctrlDistance.style.display = 'none';
-        ui.ctrlPosition.style.display = 'none';
-    }
+
 
     const marker = scene ? scene.getObjectByName("start-marker") : null;
     if (marker) marker.visible = (newState === SIM_STATES.POSITION);
 
     switch(newState) {
         case SIM_STATES.START:
-            ui.instrTitle.textContent = "INICIO";
-            ui.instrDesc.innerHTML = isMobileDevice ? 
+            updateHud("INICIO", isMobileDevice ? 
                 "<b>Selecciona para continuar</b>" : 
-                "<b>Selecciona los parámetros</b>";
+                "<b>Selecciona los parámetros</b>");
             ui.btnNextStep.style.display = 'block';
             ui.btnNextStep.textContent = "UBICAR ELECTRODO";
+            if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VER PROCESOS"; 
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(4, 3, 4);
             targetLookAt.set(0, 0, 0);
             break;
 
         case SIM_STATES.POSITION:
-            ui.instrTitle.textContent = "Paso 1: Posicionamiento";
-            ui.instrDesc.innerHTML = isMobileDevice ?
-                "Usa las <b>FLECHAS</b> para llevar la punta al círculo verde." :
-                "Usa <b>A, W, S, D</b> para llevar la punta al inicio (círculo verde).";
+            updateHud("Paso 1: Posicionamiento", isMobileDevice ?
+                "Mueve la punta al <b>círculo verde</b>." :
+                "Usa <b>A, W, S, D</b> para ir al <b>círculo verde</b>.");
             
-            if (isMobileDevice) ui.ctrlPosition.style.display = 'flex';
+            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
 
-            ui.btnNextStep.style.display = 'none'; // oculto inicialmente hasta posicionar
-            ui.btnNextStep.textContent = "CONFIGURAR ÁNGULO DE AVANCE";
+            ui.btnNextStep.style.display = 'none'; 
+            ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO AVANCE";
+            if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VOLVER"; 
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(-2, 1.5, 2);
             targetLookAt.set(-1.25, 0.2, 0);
             break;
 
         case SIM_STATES.AVANCE:
-            ui.instrTitle.textContent = "Paso 2: Ángulo de Avance";
-            ui.instrDesc.innerHTML = isMobileDevice ?
-                "Usa los botones <b>⤹ ⤸</b> para ajustar la inclinación longitudinal." :
-                "Ajusta la inclinación LONGITUDINAL con <b>C</b> y <b>V</b> hasta que el indicador esté en verde.";
+            updateHud("Paso 2: Ángulo de Avance", isMobileDevice ?
+                "Ajusta la <b>inclinación longitudinal</b>." :
+                "Usa <b>C</b> y <b>V</b> para inclinar el electrodo (15°).");
             
-            if (isMobileDevice) ui.ctrlLeadRotation.style.display = 'flex';
+            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
             
-            ui.btnNextStep.style.display = 'block';
-            ui.btnNextStep.textContent = "CONFIGURAR ÁNGULO DE TRABAJO";
+            ui.btnNextStep.style.display = 'none';
+            ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO TRABAJO";
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(0, 1.0, 2.5); 
             targetLookAt.set(-1.25, 0.6, 0);
             break;
 
         case SIM_STATES.TRABAJO:
-            ui.instrTitle.textContent = "Paso 3: Ángulo de Trabajo";
-            ui.instrDesc.innerHTML = isMobileDevice ?
-                "Usa los botones <b>↺ ↻</b> para ajustar la inclinación lateral." :
-                "Ajusta la inclinación LATERAL con <b>Z</b> y <b>X</b> hasta que el indicador esté en verde.";
+            updateHud("Paso 3: Ángulo de Trabajo", isMobileDevice ?
+                "Ajusta la <b>inclinación lateral</b>." :
+                "Usa <b>Z</b> y <b>X</b> para inclinar el electrodo.");
             
-            if (isMobileDevice) ui.ctrlRotation.style.display = 'flex';
+            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
 
-            ui.btnNextStep.style.display = 'block';
-            ui.btnNextStep.textContent = "AJUSTAR SEPARACIÓN";
+            ui.btnNextStep.style.display = 'none';
+            ui.btnNextStep.textContent = "SIGUIENTE: SEPARACIÓN";
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(2.5, 1.0, 0);
             targetLookAt.set(-1.25, 0.6, 0);
             break;
 
         case SIM_STATES.DISTANCE:
-            ui.instrTitle.textContent = "Paso 4: Separación del Electrodo";
-            ui.instrDesc.innerHTML = isMobileDevice ?
-                "Usa los botones <b>↑ ↓</b> para ajustar la altura." :
-                "Usa <b>Q</b> y <b>E</b> para ajustar la altura (arco) hasta que toque ligeramente.";
+            updateHud("Paso 4: Separación", isMobileDevice ?
+                "Ajusta la altura a <b>3 mm</b>." :
+                "Usa <b>Q</b> y <b>E</b> para ajustar la altura a <b>3 mm</b>.");
             
-            if (isMobileDevice) ui.ctrlDistance.style.display = 'flex';
+            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
 
-            ui.btnNextStep.style.display = 'block';
-            ui.btnNextStep.textContent = "SIGUIENTE PASO";
+            ui.btnNextStep.style.display = 'none';
+            ui.btnNextStep.textContent = "SIGUIENTE: SOLDAR";
             ui.btnStartWeld.style.display = 'none';
-            targetCamPos.set(1.2, 0.5, 1.2);
-            targetLookAt.set(0, 0.2, 0);
+            targetCamPos.set(-1.1, 0.15, 0.3); // Vista lateral extrema y cercana
+            targetLookAt.set(-1.25, 0.12, 0); // Foco exacto en el hueco
             break;
 
         case SIM_STATES.READY:
@@ -236,6 +223,7 @@ function setSimState(newState) {
             ui.instrDesc.textContent = isMobileDevice ?
                 "Mantén pulsado SOLDAR para empezar." :
                 "Asegúrate de que la punta toque ligeramente la pieza.";
+            if (ui.mobileControls) ui.mobileControls.style.display = 'none';
             ui.btnNextStep.style.display = 'none';
             ui.btnStartWeld.style.display = 'block';
             ui.btnStartWeld.textContent = "EMPEZAR A SOLDAR";
@@ -253,6 +241,14 @@ function setSimState(newState) {
             break;
     }
     if (controls) controls.update();
+}
+
+function updateHud(title, desc) {
+    if (ui.instrTitle) ui.instrTitle.textContent = title;
+    if (ui.instrDesc) {
+        ui.instrDesc.innerHTML = desc;
+        ui.instrDesc.dataset.base = desc; // Store for dynamic swapping
+    }
 }
 
 // Estados de Simulación
@@ -647,22 +643,17 @@ function update3DModel() {
     angleIndicator = new THREE.Group();
     angleIndicator.name = "angle-indicator";
     
-    const indicatorMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 });
+    const angleIndicatorMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 });
     const thickLineGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.7, 8);
     
     // Referencia Horizontal (Chapa)
-    const refLinePlate = new THREE.Mesh(thickLineGeom, indicatorMat.clone());
+    const refLinePlate = new THREE.Mesh(thickLineGeom, angleIndicatorMat.clone());
     refLinePlate.rotation.z = Math.PI / 2;
-    refLinePlate.position.x = 0.35; // Hacia la derecha
+    refLinePlate.position.x = 0.35; // Inicial, se actualizará dinámicamente
     angleIndicator.add(refLinePlate);
+    angleIndicator.userData.refLinePlate = refLinePlate;
 
-    // Línea Electrodo (Dinámica)
-    const refLineElectrode = new THREE.Mesh(thickLineGeom, indicatorMat.clone());
-    refLineElectrode.position.y = 0.35; 
-    const electrodePivot = new THREE.Group();
-    electrodePivot.add(refLineElectrode);
-    angleIndicator.add(electrodePivot);
-    angleIndicator.userData.electrodePivot = electrodePivot;
+
 
     // Arco de Grados (Contenedor para recreación dinámica)
     const arcContainer = new THREE.Group();
@@ -738,11 +729,47 @@ function update3DModel() {
     angleLabel.visible = false;
     scene.add(angleLabel);
 
-    // 3. Guía de Distancia
-    const distGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,-1,0)]);
-    const distMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.05, gapSize: 0.03 });
-    distanceIndicator = new THREE.Line(distGeom, distMat);
-    distanceIndicator.computeLineDistances();
+    // 3. Guía de Distancia (Cota)
+    distanceIndicator = new THREE.Group();
+    distanceIndicator.name = "distance-indicator";
+    
+    const distIndicatorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const verticalLineGeom = new THREE.CylinderGeometry(0.005, 0.005, 1, 6);
+    const verticalLine = new THREE.Mesh(verticalLineGeom, distIndicatorMat);
+    verticalLine.position.y = -0.5; // Origin at worldTip, extends down
+    distanceIndicator.add(verticalLine);
+
+    // Top horizontal tick
+    const tickGeom = new THREE.CylinderGeometry(0.005, 0.005, 0.1, 6);
+    const topTick = new THREE.Mesh(tickGeom, distIndicatorMat);
+    topTick.rotation.z = Math.PI / 2;
+    distanceIndicator.add(topTick);
+
+    // Bottom horizontal tick (at -1, will be scaled)
+    const bottomTick = new THREE.Mesh(tickGeom, distIndicatorMat);
+    bottomTick.rotation.z = Math.PI / 2;
+    bottomTick.position.y = -1;
+    distanceIndicator.add(bottomTick);
+    
+    // Dist Label (Enlarged)
+    const distLabelCanvas = document.createElement('canvas');
+    distLabelCanvas.width = 512; distLabelCanvas.height = 160;
+    const dlctx = distLabelCanvas.getContext('2d');
+    dlctx.font = 'Black 130px Orbitron, Arial'; // Massive font
+    dlctx.textAlign = 'center';
+    dlctx.fillStyle = '#ffffff';
+    dlctx.strokeStyle = '#000000';
+    dlctx.lineWidth = 8;
+    dlctx.strokeText('0 mm', 256, 110);
+    dlctx.fillText('0 mm', 256, 110);
+    const distLabelTex = new THREE.CanvasTexture(distLabelCanvas);
+    const distLabelMat = new THREE.SpriteMaterial({ map: distLabelTex, transparent: true, depthTest: false }); 
+    const distLabel = new THREE.Sprite(distLabelMat);
+    distLabel.scale.set(0.8, 0.25, 1); // Mega scale
+    distLabel.position.set(0.15, -0.5, 0); // Positioned at local midpoint
+    distanceIndicator.add(distLabel);
+    distanceIndicator.userData.label = distLabel;
+
     scene.add(distanceIndicator);
 
     scene.add(toolGroup);
@@ -786,16 +813,32 @@ function animate() {
 
         // Izquierda / Derecha (A/D) / Adelante / Atrás (W/S)
         if (canMoveH) {
+            // Teclado
             if (keysPressed['a']) toolOffset.x -= moveSpeed * deltaTime;
             if (keysPressed['d']) toolOffset.x += moveSpeed * deltaTime;
             if (keysPressed['w']) toolOffset.z -= moveSpeed * deltaTime;
             if (keysPressed['s']) toolOffset.z += moveSpeed * deltaTime;
+
+            // Móvil Proporcional (Mueve en eje X lateralmente)
+            if (isMobileDevice) {
+                toolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+            }
         }
         
         // Arriba / Abajo (Q/E)
         if (canMoveV) {
-            if (keysPressed['q']) toolOffset.y += moveSpeed * deltaTime;
-            if (keysPressed['e']) toolOffset.y -= moveSpeed * deltaTime;
+            // Sensibilidad reducida para el paso de SEPARACIÓN
+            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.2 : 1.0;
+            const stepMoveSpeed = moveSpeed * sensitivity;
+
+            // Teclado
+            if (keysPressed['q']) toolOffset.y += stepMoveSpeed * deltaTime;
+            if (keysPressed['e']) toolOffset.y -= stepMoveSpeed * deltaTime;
+
+            // Móvil Proporcional (Mueve en eje Y verticalmente)
+            if (isMobileDevice) {
+                toolOffset.y += mobileDisplacement * stepMoveSpeed * deltaTime;
+            }
         }
 
         // Rotación (Intercambio de ejes: C/V para Longitudinal, Z/X para Lateral)
@@ -805,6 +848,11 @@ function animate() {
             if (isAvance) {
                 if (keysPressed['c']) toolRotation.z += rotationSpeed * deltaTime;
                 if (keysPressed['v']) toolRotation.z -= rotationSpeed * deltaTime;
+                
+                // Móvil Proporcional
+                if (isMobileDevice) {
+                    toolRotation.z += mobileDisplacement * rotationSpeed * deltaTime;
+                }
             }
             
             // Paso: ÁNGULO DE TRABAJO (Z/X - Lateral - Eje X)
@@ -812,6 +860,11 @@ function animate() {
             if (isTrabajo) {
                 if (keysPressed['z']) toolRotation.x += rotationSpeed * deltaTime;
                 if (keysPressed['x']) toolRotation.x -= rotationSpeed * deltaTime;
+
+                // Móvil Proporcional
+                if (isMobileDevice) {
+                    toolRotation.x += mobileDisplacement * rotationSpeed * deltaTime;
+                }
             }
         }
 
@@ -822,7 +875,9 @@ function animate() {
         
         // 1. Límites generales (no atravesar la mesa/placa base)
         toolRotation.x = Math.max(-maxTilt, Math.min(maxTilt, toolRotation.x));
-        toolRotation.z = Math.max(-maxTilt, Math.min(maxTilt, toolRotation.z));
+        // Límite Paso 2: No pasar de 90 grados (vertical) en Ángulo de Avance
+        toolRotation.z = Math.max(-maxTilt, Math.min(0, toolRotation.z)); 
+        
 
         // 2. Límites específicos por geometría (Unión en T)
         const pieceContainer = scene.getObjectByName("piece-container");
@@ -879,7 +934,10 @@ function animate() {
                 const distH = new THREE.Vector2(worldTip.x, worldTip.z).distanceTo(new THREE.Vector2(markerPos.x, markerPos.z));
                 
                 if (distH < 0.08) {
-                    ui.btnNextStep.style.display = 'block';
+                    if (ui.btnNextStep.style.display === 'none') {
+                        ui.btnNextStep.style.display = 'block';
+                        ui.instrDesc.innerHTML = "<b>¡Punto encontrado!</b> Haz clic para continuar.";
+                    }
                     if (angleLabel) {
                         angleLabel.visible = true;
                         // Posición a la izquierda (-X) y un poco elevado (+Y)
@@ -890,7 +948,10 @@ function animate() {
                         angleLabel.quaternion.copy(camera.quaternion);
                     }
                 } else {
-                    ui.btnNextStep.style.display = 'none';
+                    if (ui.btnNextStep.style.display === 'block') {
+                        ui.btnNextStep.style.display = 'none';
+                        ui.instrDesc.innerHTML = ui.instrDesc.dataset.base;
+                    }
                     if (angleLabel) angleLabel.visible = false;
                 }
             }
@@ -958,17 +1019,86 @@ function animate() {
                 const showDistance = currentSimState === SIM_STATES.DISTANCE || currentSimState >= SIM_STATES.WELDING;
                 distanceIndicator.visible = (showDistance && !isTouching);
                 distanceIndicator.position.copy(worldTip);
-                distanceIndicator.scale.y = Math.max(0.001, distToSurface);
+                
+                const heightVal = Math.max(0.001, distToSurface);
+                distanceIndicator.scale.y = heightVal;
+
+                if (distanceIndicator.visible) {
+                    const distMm = (heightVal * 100).toFixed(1);
+                    const isPerfect = Math.abs(heightVal * 100 - 3) < 0.2; 
+                    const isTooHigh = (heightVal * 100) >= 10;
+                    const isTouchingPlate = (heightVal * 100) < 0.1;
+                    
+                    // Lógica de HUD dinámico para Distancia
+                    if (isPerfect) {
+                        if (ui.btnNextStep.style.display === 'none') {
+                            ui.btnNextStep.style.display = 'block';
+                            ui.instrDesc.innerHTML = "<b>¡Separación ideal!</b> Pulsa para ir al inicio.";
+                        }
+                    } else {
+                        if (ui.btnNextStep.style.display === 'block') {
+                            ui.btnNextStep.style.display = 'none';
+                            ui.instrDesc.innerHTML = ui.instrDesc.dataset.base;
+                        }
+                    }
+
+                    // Determinar Color: 0mm (Rojo) -> 3mm (Verde) -> 10mm+ (Rojo)
+                    let cotaColor = 0xffffff; // Blanco base
+                    if (isPerfect) cotaColor = 0x00ff00; // Verde brillante
+                    else if (isTouchingPlate || isTooHigh) cotaColor = 0xff0000; // Rojo si toca o está muy lejos
+
+                    const distLabel = distanceIndicator.userData.label;
+                    if (distLabel) {
+                        const lctx = distLabel.material.map.image.getContext('2d');
+                        lctx.clearRect(0, 0, 512, 160);
+                        lctx.font = 'Black 130px Orbitron, Arial'; // Massive font
+                        lctx.fillStyle = `#${new THREE.Color(cotaColor).getHexString()}`;
+                        lctx.strokeStyle = '#000000';
+                        lctx.lineWidth = 8;
+                        const text = isPerfect ? "3 mm Perfecto" : `${distMm} mm`;
+                        lctx.strokeText(text, 256, 110);
+                        lctx.fillText(text, 256, 110);
+                        distLabel.material.map.needsUpdate = true;
+                        
+                        // Sprite siempre mira a cámara
+                        distLabel.quaternion.copy(camera.quaternion);
+                        
+                        // Aplicar rotación adicional de 90º en Z (local) para que el texto sea vertical
+                        const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+                        distLabel.quaternion.multiply(qZ);
+                        
+                        // Centrado dinámico en la mitad de la separación
+                        distLabel.position.set(0.18, -0.5, 0); // -0.5 es el centro de la línea que va de 0 a -1 (escalada por heightVal)
+
+                        // Update line colors
+                        distanceIndicator.children.forEach(c => {
+                            if (c.isMesh) c.material.color.setHex(cotaColor);
+                        });
+                    }
+                }
                 
                 // Mostrar ÁNGULO solo en pasos 2 y 3
                 const isAvance = currentSimState === SIM_STATES.AVANCE;
                 const isTrabajo = currentSimState === SIM_STATES.TRABAJO;
-                angleIndicator.visible = isAvance || isTrabajo;
+                angleIndicator.visible = (isAvance || isTrabajo) && (currentSimState !== SIM_STATES.DISTANCE);
+                
+                // Limpiar labels de ángulos si no estamos en esos pasos
+                if (!angleIndicator.visible && angleLabel) angleLabel.visible = false;
                 
                 if (angleIndicator.visible) {
                     angleIndicator.position.copy(worldTip);
-                    angleIndicator.rotation.y = isTrabajo ? Math.PI / 2 : 0; 
-    
+                    
+                    if (isTrabajo) {
+                        // 1. Inclinación de Avance (Z)
+                        const qAdvance = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), toolRotation.z);
+                        // 2. Giro lateral de 90 grados (Y)
+                        const qSide = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+                        // Combinar: Primero inclinar, luego girar lateralmente
+                        angleIndicator.quaternion.copy(qAdvance.multiply(qSide));
+                    } else {
+                        // Paso 2: Avance - Debe heredar cualquier inclinación lateral (X) aplicada previamente
+                        angleIndicator.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), toolRotation.x);
+                    }    
                     let idealAngle = 0;
                     let currentAngle = 0;
                     let electrodeRot = 0;
@@ -994,32 +1124,52 @@ function animate() {
     
                     if (angleIndicator.visible) {
                         const diff = Math.abs(currentAngle - idealAngle);
+                        const isPerfectAngle = diff < 0.05; // ~3 grados de tolerancia
+                        
+                        // Lógica de HUD dinámico para Ángulos
+                        if (isPerfectAngle) {
+                            if (ui.btnNextStep.style.display === 'none') {
+                                ui.btnNextStep.style.display = 'block';
+                                ui.instrDesc.innerHTML = isAvance ? 
+                                    "<b>¡Ángulo de avance correcto!</b> Pulsa para el siguiente." :
+                                    "<b>¡Ángulo de trabajo correcto!</b> Pulsa para continuar.";
+                            }
+                        } else {
+                            if (ui.btnNextStep.style.display === 'block') {
+                                ui.btnNextStep.style.display = 'none';
+                                ui.instrDesc.innerHTML = ui.instrDesc.dataset.base;
+                            }
+                        }
+
                         const errorFactor = Math.min(1, diff / 0.5);
                         const indicatorColor = new THREE.Color().setRGB(errorFactor, 1 - errorFactor, 0);
 
                         // Actualizar color y rotación del pivote del indicador
-                        if (angleIndicator.userData.electrodePivot) {
-                            angleIndicator.userData.electrodePivot.rotation.z = -electrodeRot;
-                            angleIndicator.userData.electrodePivot.children[0].material.color.copy(indicatorColor);
-                        }
+
                         angleIndicator.children[0].material.color.copy(indicatorColor); // Ref horizontal (chapa)
 
-                        // --- ACTUALIZAR ARCO DINÁMICO (DESDE LA CHAPA) ---
+                        // --- ACTUALIZAR ARCO DINÁMICO Y BARRA DE CHAPA ---
                         const arcContainer = angleIndicator.userData.arcContainer;
+                        const refLinePlate = angleIndicator.userData.refLinePlate;
                         arcContainer.clear();
                         
+                        const rotSign = Math.sign(electrodeRot) || -1; // -1 por defecto (lado derecho)
+                        const sideMultiplier = -rotSign; // Invertir para que coincida con el eje visual
+                        
+                        // Reposicionar barra de la chapa dinámicamente
+                        if (refLinePlate) {
+                            refLinePlate.position.x = 0.35 * sideMultiplier;
+                        }
+
                         // El ángulo visual del arco es desde la horizontal (0) hasta el electrodo
-                        // Si el electrodo está a 15° de la vertical, está a 75° de la horizontal
                         const angleFromPlate = Math.PI/2 - Math.abs(electrodeRot);
                         const absArcAngle = Math.max(0.01, angleFromPlate);
                         
                         const torusGeom = new THREE.TorusGeometry(0.4, 0.01, 8, 30, absArcAngle);
                         const torus = new THREE.Mesh(torusGeom, new THREE.MeshBasicMaterial({ color: indicatorColor }));
                         
-                        // Si el electrodo inclina a la derecha (Z negativo), el arco va de 0 a angleFromPlate
-                        // Si inclina a la izquierda (Z positivo), el arco iría de PI a PI-absArcAngle
-                        // En Paso 2 hay restricción de lado derecho (Z <= 0)
-                        if (electrodeRot <= 0) {
+                        // Posicionar arco según el signo de rotación
+                        if (sideMultiplier > 0) {
                             torus.rotation.z = 0; 
                         } else {
                             torus.rotation.z = Math.PI - absArcAngle;
@@ -1028,7 +1178,20 @@ function animate() {
         
                         if (angleLabel) {
                             angleLabel.visible = true;
-                            angleLabel.position.copy(worldTip).add(new THREE.Vector3(0.2, 0.3, 0));
+                            
+                            // CALCULAR POSICIÓN CENTRADA EN EL ARCO
+                            const midAngle = angleFromPlate / 2;
+                            const labelRadius = 0.55; // Radio ligeramente mayor que el arco (0.4)
+                            
+                            // Vector local relativo al pivote de la cota
+                            const lx = Math.cos(midAngle) * labelRadius * sideMultiplier;
+                            const ly = Math.sin(midAngle) * labelRadius;
+                            const localPos = new THREE.Vector3(lx, ly, 0);
+                            
+                            // Aplicar la rotación actual de la cota para que el label siga el movimiento
+                            localPos.applyQuaternion(angleIndicator.quaternion);
+                            
+                            angleLabel.position.copy(worldTip).add(localPos);
                             angleLabel.scale.set(0.6, 0.15, 1);
                             angleLabel.quaternion.copy(camera.quaternion);
 
@@ -1079,9 +1242,7 @@ function animate() {
                 }
             });
         }
-    }
 
-    // Suavizado de cámara
         // Suavizado de cámara (Glide logic)
         if (isCameraTransitioning && camera && targetCamPos && targetLookAt) {
             camera.position.lerp(targetCamPos, 0.05);
@@ -1096,9 +1257,57 @@ function animate() {
             }
         }
 
+        } // Fin if (currentTool)
+
         if (controls) controls.update();
         if (renderer && scene && camera) renderer.render(scene, camera);
     } catch (err) {
         console.warn("Animation Loop Error:", err);
     }
+}
+
+// NUEVA LÓGICA DE JOYSTICK PROPORCIONAL
+let mobileDisplacement = 0; // -1 a 1
+
+function initJoystick() {
+    const knob = ui.joystickKnob;
+    const container = ui.universalJoystick;
+    if (!knob || !container) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let currentMaxPath = 100;
+
+    const onStart = (e) => {
+        isDragging = true;
+        currentMaxPath = (container.clientWidth - knob.clientWidth) / 2;
+        startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        knob.style.transition = 'none';
+    };
+
+    const onMove = (e) => {
+        if (!isDragging) return;
+        if (currentMaxPath <= 0) currentMaxPath = (container.clientWidth - knob.clientWidth) / 2;
+        if (currentMaxPath <= 0) return;
+
+        const currentX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        let delta = currentX - startX;
+        delta = Math.max(-currentMaxPath, Math.min(currentMaxPath, delta));
+        knob.style.transform = `translateX(${delta}px)`;
+        mobileDisplacement = delta / currentMaxPath;
+    };
+
+    const onEnd = () => {
+        isDragging = false;
+        mobileDisplacement = 0;
+        knob.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        knob.style.transform = 'translateX(0)';
+    };
+
+    container.addEventListener('touchstart', onStart, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    container.addEventListener('mousedown', onStart);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
 }
