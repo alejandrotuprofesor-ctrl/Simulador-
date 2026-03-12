@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="info">
+        <h1 class="hud-text">Simulation Mode: Active</h1>
+    </div>
+
+    <div id="ui-overlay">
+        <!-- Pantalla de Bienvenida -->
+        <section id="welcome-screen" class="screen active">
+            <div class="glass-panel">
+                <img src="Logo simulador.png" alt="Logo Simulador" style="width: 250px; max-width: 100%; margin-bottom: 2rem; filter: drop-shadow(0 0 15px var(--neon-blue))">
+                <h2 style="font-weight: 900; letter-spacing: 5px; color: #fff; margin-bottom: 0.5rem;">WELDING SIMULATOR</h2>
+                <p class="hud-text" style="margin-bottom: 2rem;">Visual Computing & Thermal Analysis</p>
+                <button id="btn-start" class="btn-futuristic" style="position: relative; z-index: 100;">EMPEZAR</button>
+            </div>
+        </section>
+
+        <!-- Pantalla de Preguntas -->
+        <section id="question-screen" class="screen">
+            <div class="progress-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div class="glass-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <span id="step-count" class="hud-text">STEP 01/06</span>
+                    <button id="btn-back" style="background: none; border: none; color: var(--neon-blue); cursor: pointer; font-family: inherit;">[ VOLVER ]</button>
+                </div>
+                <h2 id="question-title">SELECT MATERIAL</h2>
+                <div id="options-gallery" class="options-grid">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Pantalla Final / Resumen Visual -->
+        <section id="result-screen" class="screen">
+            <div class="glass-panel">
+                <h2 style="color: var(--neon-blue); letter-spacing: 3px;">CONFIGURACIÓN FINAL</h2>
+                <div id="visual-summary" style="margin-top: 2rem;">
+                    <!-- Data-driven HUD components -->
+                </div>
+
+                <!-- HUD DE SIMULACIÓN GUIADA -->
+                <div id="sim-hud" style="display: none; margin-top: 1.5rem; border-top: 1px solid rgba(0, 243, 255, 0.2); padding-top: 1.5rem;">
+                    <div id="sim-instructions" style="text-align: center; margin-bottom: 1.5rem;">
+                        <h3 id="instr-title" style="color: var(--neon-purple); text-shadow: 0 0 10px var(--neon-purple);">Paso 1: Ángulo de Trabajo</h3>
+                        <p id="instr-desc" class="hud-text">Usa <b>Z</b> y <b>X</b> para ajustar el ángulo lateral del electrodo hasta que el indicador esté en verde.</p>
+                    </div>
+                    <div id="sim-controls" style="display: flex; gap: 1rem; justify-content: center;">
+                        <button id="btn-next-step" class="btn-futuristic" style="font-size: 0.9rem; padding: 0.6rem 1.5rem; background: rgba(188, 19, 254, 0.2);">SIGUIENTE PASO</button>
+                        <button id="btn-start-weld" class="btn-futuristic" style="display: none; font-size: 0.9rem; padding: 0.6rem 1.5rem; border-color: #ff4444; color: #ff4444; background: rgba(255, 68, 68, 0.1);">EMPEZAR A SOLDAR</button>
+                    </div>
+                </div>
+
+                <button id="btn-restart" class="btn-futuristic" style="font-size: 1rem; padding: 0.8rem 2rem; margin-top: 2rem;">NUEVA SIMULACIÓN</button>
+            </div>
+        </section>
+
+        <div class="footer-info">SYSTEM STATUS: OPTIMAL | © 2026 APRENDER CADA DÍA</div>
+    </div>
+
+    <!-- Load Three.js Global Version (r145 for OrbitControls support) -->
+    <script src="https://unpkg.com/three@0.145.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script src="data.js"></script>
+    <script src="main.js"></script>
+    
+    <script>
+        console.log("System Initialized - Standard Script Mode");
+        // Test if JS can talk to UI immediately
+        window.addEventListener('load', () => {
+            const btn = document.getElementById('btn-start');
+            if(btn) {
+                btn.onmousedown = () => console.log("MouseDown on Start");
+                console.log("Button identified in inline script");
+            }
+        });
+    </script>
+</body>
+</html>

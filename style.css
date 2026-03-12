@@ -1,0 +1,342 @@
+:root {
+    --neon-blue: #00f3ff;
+    --neon-purple: #bc13fe;
+    --dark-bg: rgba(10, 10, 15, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #e0e0e0;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #050505;
+    font-family: 'orbitron', sans-serif;
+    color: var(--text-primary);
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    display: block;
+}
+
+.glass-panel {
+    background: var(--dark-bg);
+    backdrop-filter: blur(15px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 243, 255, 0.05);
+    text-align: center;
+    max-width: 90%;
+    width: 600px;
+    pointer-events: auto !important;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+
+/* Pantallas */
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 600px;
+    max-width: 90%;
+    pointer-events: auto; /* ENABLE CLICKS HERE */
+}
+
+.screen.active {
+    display: flex !important;
+    animation: fadeInScale 0.4s ease-out forwards;
+}
+
+#result-screen.active {
+    justify-content: flex-start;
+    align-items: center;
+    padding-top: 0;
+    height: 100%;
+    pointer-events: none;
+}
+
+#result-screen .glass-panel {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    text-align: center;
+    margin-top: 0;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0 0 20px 20px;
+    border-top: none;
+    position: absolute;
+    top: 0;
+}
+
+#result-screen .options-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0;
+    overflow-x: auto;
+}
+
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Botón Futurista */
+.btn-futuristic {
+    background: transparent;
+    border: 2px solid var(--neon-blue);
+    color: var(--neon-blue);
+    padding: 1rem 3rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    margin-top: 2rem;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+}
+
+#btn-restart {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    margin-top: 0;
+    font-size: 0.9rem;
+    padding: 0.6rem 1.5rem;
+}
+
+#btn-restart:hover {
+    background: var(--neon-blue);
+    color: #000;
+}
+
+.btn-futuristic:hover {
+    background: var(--neon-blue);
+    color: #000;
+    box-shadow: 0 0 30px var(--neon-blue);
+}
+
+.btn-futuristic:active {
+    transform: scale(0.95);
+    box-shadow: 0 0 15px var(--neon-blue);
+}
+
+.btn-futuristic::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: 0.5s;
+}
+
+.btn-futuristic:hover::before {
+    left: 100%;
+}
+
+/* Galería de Opciones */
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+    width: 100%;
+}
+
+.option-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.option-card:hover {
+    border-color: var(--neon-blue);
+    background: rgba(0, 243, 255, 0.05);
+    transform: translateY(-5px);
+}
+
+.option-card:active {
+    transform: scale(0.95);
+    background: rgba(0, 243, 255, 0.1);
+}
+
+.option-card img {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 0.8rem;
+    pointer-events: none;
+}
+
+.option-card h3 {
+    font-size: 0.9rem;
+    margin: 0;
+    color: #fff;
+    pointer-events: none;
+}
+
+/* Progreso */
+.progress-container {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.progress-bar {
+    height: 100%;
+    background: var(--neon-blue);
+    width: 0%;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px var(--neon-blue);
+}
+
+/* HUD elements */
+.hud-text {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    opacity: 0.8;
+    letter-spacing: 1px;
+}
+
+.summary-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid var(--neon-blue);
+    padding: 0.3rem 0.8rem;
+    margin-bottom: 0;
+    border-radius: 0 0 4px 4px;
+    flex: 0 0 auto;
+    min-width: 100px;
+    backdrop-filter: blur(10px);
+}
+
+.summary-label {
+    font-size: 0.5rem;
+    color: var(--neon-blue);
+    margin-bottom: 0.1rem;
+    font-weight: bold;
+    opacity: 0.7;
+}
+
+.summary-value {
+    font-size: 0.75rem;
+    color: #fff;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Sim HUD */
+#sim-hud {
+    pointer-events: auto;
+    width: 100%;
+    animation: slideUp 0.5s ease-out;
+}
+
+#sim-instructions {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 1rem;
+    border-radius: 10px;
+    border-left: 3px solid var(--neon-purple);
+    margin-bottom: 2rem !important;
+}
+
+#instr-title {
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#instr-desc {
+    font-size: 0.8rem;
+    margin: 0;
+    line-height: 1.4;
+    color: #bbb;
+}
+
+#sim-controls {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+}
+
+#btn-next-step {
+    border-color: var(--neon-purple);
+    color: var(--neon-purple);
+    font-size: 0.8rem;
+    padding: 0.8rem 2rem;
+    box-shadow: 0 0 10px rgba(188, 19, 254, 0.2);
+}
+
+#btn-next-step:hover {
+    background: var(--neon-purple);
+    color: #fff;
+    box-shadow: 0 0 20px var(--neon-purple);
+}
+
+#btn-start-weld {
+    border-color: #ff4444;
+    color: #ff4444;
+    font-size: 0.8rem;
+    padding: 0.8rem 2rem;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.2);
+}
+
+#btn-start-weld:hover {
+    background: #ff4444;
+    color: #fff;
+    box-shadow: 0 0 25px #ff4444;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Footer */
+.footer-info {
+    position: absolute;
+    bottom: 20px;
+    font-size: 0.7rem;
+    opacity: 0.5;
+    letter-spacing: 1px;
+}
