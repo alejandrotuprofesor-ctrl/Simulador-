@@ -5,6 +5,27 @@ let userChoices = [];
 let questionHistory = [];
 let ui = {};
 
+// Variables de Simulación Globales (Inicialización segura para evitar NaN)
+let isWelding = false;
+let isWeldButtonPressed = false;
+let keysPressed = {};
+let toolOffset = { x: 0, y: 0, z: 0 };
+let toolRotation = { x: 0, z: 0 };
+let plateThickness = 0.1;
+let consumptionRate = 0.05;
+let electrodeInitialHeight = 3.5;
+let electrodeCurrentHeight = 3.5;
+let moveSpeed = 0.5;
+let rotationSpeed = 1.0;
+let lastBeadPos = new THREE.Vector3(100, 100, 100);
+
+let arcLight, arcGlare, sparkParticles;
+let beadContainer;
+let angleIndicator, angleLabel, distanceIndicator;
+
+// Cámara gliding
+let isCameraTransitioning = false;
+
 // Esperar a que el DOM esté listo
 window.addEventListener('DOMContentLoaded', () => {
     console.log("DOM fully loaded and parsed");
@@ -66,7 +87,8 @@ function initUI() {
 }
 
 function nextSimStep() {
-    if (currentSimState === SIM_STATES.ANGLE) setSimState(SIM_STATES.POSITION);
+    if (currentSimState === SIM_STATES.START) setSimState(SIM_STATES.ANGLE);
+    else if (currentSimState === SIM_STATES.ANGLE) setSimState(SIM_STATES.POSITION);
     else if (currentSimState === SIM_STATES.POSITION) setSimState(SIM_STATES.READY);
     else if (currentSimState === SIM_STATES.READY) setSimState(SIM_STATES.WELDING);
 }
@@ -77,19 +99,32 @@ let targetLookAt = new THREE.Vector3(0, 0, 0);
 
 function setSimState(newState) {
     currentSimState = newState;
+    isCameraTransitioning = true; // Activar planeo de cámara
     console.log("Cambiando estado simulación a:", newState);
 
-    const pieceContainer = scene.getObjectByName("piece-container");
+    const pieceContainer = scene ? scene.getObjectByName("piece-container") : null;
     const isT = pieceContainer?.userData.isTJoint;
 
     switch(newState) {
+        case SIM_STATES.START:
+            ui.instrTitle.textContent = "INICIO";
+            ui.instrDesc.innerHTML = "<b>Selecciona los parámetros</b>";
+            ui.btnNextStep.style.display = 'block';
+            ui.btnNextStep.textContent = "CONFIGURAR ÁNGULO";
+            ui.btnStartWeld.style.display = 'none';
+            // Vista libre inicial (más alejada para ver todo)
+            targetCamPos.set(4, 3, 4);
+            targetLookAt.set(0, 0, 0);
+            break;
+
         case SIM_STATES.ANGLE:
             ui.instrTitle.textContent = "Paso 1: Ángulo de Trabajo";
             ui.instrDesc.innerHTML = "Ajusta la inclinación con <b>Z</b> y <b>X</b> hasta que el indicador esté en verde.";
             ui.btnNextStep.style.display = 'block';
+            ui.btnNextStep.textContent = "SIGUIENTE PASO";
             ui.btnStartWeld.style.display = 'none';
-            // Vista lateral exacta
-            targetCamPos.set(2.5, 0.3, 0); 
+            // Vista frontal (desde el lateral de la mesa)
+            targetCamPos.set(0, 0.7, 2.0); 
             targetLookAt.set(0, 0.1, 0);
             break;
 
@@ -97,6 +132,7 @@ function setSimState(newState) {
             ui.instrTitle.textContent = "Paso 2: Posicionamiento";
             ui.instrDesc.innerHTML = "Usa <b>A, W, S, D</b> para llevar la punta al inicio del cordón.";
             ui.btnNextStep.style.display = 'block';
+            ui.btnNextStep.textContent = "SIGUIENTE PASO";
             ui.btnStartWeld.style.display = 'none';
             // Vista isométrica superior
             targetCamPos.set(1.5, 1.2, 1.5);
@@ -123,9 +159,8 @@ function setSimState(newState) {
 }
 
 // Estados de Simulación
-const SIM_STATES = { ANGLE: 0, POSITION: 1, READY: 2, WELDING: 3 };
-let currentSimState = SIM_STATES.ANGLE;
-let isWeldButtonPressed = false;
+const SIM_STATES = { START: -1, ANGLE: 0, POSITION: 1, READY: 2, WELDING: 3 };
+let currentSimState = SIM_STATES.START;
 
 window.addEventListener('keydown', (e) => {
     keysPressed[e.key.toLowerCase()] = true;
@@ -157,13 +192,24 @@ function init() {
     document.body.appendChild(renderer.domElement);
 
     // Controles
-    const OC = THREE.OrbitControls || window.OrbitControls;
-    if (OC) {
-        controls = new OC(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.maxPolarAngle = Math.PI / 2; // Limitar cámara para no bajar del plano XY
-    } else {
-        console.error("OrbitControls not found!");
+    try {
+        const OC = THREE.OrbitControls || window.OrbitControls;
+        if (OC) {
+            controls = new OC(camera, renderer.domElement);
+            // Permitir solo ver la parte superior de la mesa (0 a 90 grados)
+            controls.minPolarAngle = 0;
+            controls.maxPolarAngle = Math.PI / 2; 
+            
+            // Interrumpir transición automática si el usuario interactúa
+            const stopTransition = () => { isCameraTransitioning = false; };
+            renderer.domElement.addEventListener('mousedown', stopTransition);
+            renderer.domElement.addEventListener('touchstart', stopTransition);
+            renderer.domElement.addEventListener('wheel', stopTransition);
+        } else {
+            console.error("OrbitControls not found!");
+        }
+    } catch (e) {
+        console.error("Error initializing controls:", e);
     }
 
     // Iluminación optimizada (menos brillos molestos)
@@ -334,7 +380,7 @@ function showSummary() {
     // Iniciar HUD de simulación
     if (ui.simHud) {
         ui.simHud.style.display = 'block';
-        setSimState(SIM_STATES.ANGLE);
+        setSimState(SIM_STATES.START);
     }
 }
 
@@ -553,33 +599,37 @@ function update3DModel() {
     
     const angleLineMat = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
     
-    // Arco (90 grados)
+    // Arco (90 grados) en plano XY para vista frontal
     const anglePoints = [];
     for(let i=0; i<=30; i++) {
         const a = (i/30) * Math.PI/2;
-        anglePoints.push(new THREE.Vector3(0, Math.sin(a)*0.4, Math.cos(a)*0.4));
+        anglePoints.push(new THREE.Vector3(Math.cos(a)*0.4, Math.sin(a)*0.4, 0));
     }
     const angleLineGeom = new THREE.BufferGeometry().setFromPoints(anglePoints);
     const arcLine = new THREE.Line(angleLineGeom, angleLineMat);
     angleIndicator.add(arcLine);
     
-    // Líneas de referencia (Cotas)
-    const refLineGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,0.5)]);
+    // Líneas de referencia (Cotas) en plano XY
+    const refLineGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0.5,0,0)]);
     const refLinePiece = new THREE.Line(refLineGeom, angleLineMat);
     angleIndicator.add(refLinePiece);
     
     const refLineElectrode = new THREE.Line(refLineGeom, angleLineMat);
     angleIndicator.add(refLineElectrode);
     
-    // Puntas de flecha
+    // Puntas de flecha (Tangenciales - rotadas 90º en Z sobre la base anterior)
     const arrowGeom = new THREE.ConeGeometry(0.015, 0.04, 8);
+    
     const arrow1 = new THREE.Mesh(arrowGeom, angleLineMat);
-    arrow1.position.set(0, 0, 0.4);
-    arrow1.rotation.x = -Math.PI/2;
+    arrow1.position.set(0.4, 0, 0); 
+    // Apunta hacia arriba (Eje Y) para ser tangente al inicio del arco en X=0.4
+    arrow1.rotation.z = 0; 
     angleIndicator.add(arrow1);
     
     const arrow2 = new THREE.Mesh(arrowGeom, angleLineMat);
     arrow2.position.set(0, 0.4, 0);
+    // Apunta hacia la izquierda (-X) para ser tangente al final del arco en Y=0.4
+    arrow2.rotation.z = Math.PI / 2; 
     angleIndicator.add(arrow2);
     
     angleIndicator.userData.refLineElectrode = refLineElectrode;
@@ -612,8 +662,14 @@ function update3DModel() {
     // Teletransporte de cámara para visualización clara y cercana
     const targetPos = new THREE.Vector3(0, t, 0);
     camera.position.set(1.5, 0.8, 1.5); 
-    controls.target.copy(targetPos);
-    controls.update(); 
+    if (controls) {
+        controls.target.copy(targetPos);
+        controls.update(); 
+    }
+    
+    // Sincronizar targets de animación
+    targetCamPos.set(1.5, 0.8, 1.5);
+    targetLookAt.copy(targetPos);
 }
 
 function onWindowResize() {
@@ -649,12 +705,17 @@ function animate() {
             if (keysPressed['e']) toolOffset.y -= moveSpeed * deltaTime;
         }
 
-        // Rotación (Z/X para eje X, C/V para eje Z)
+        // Rotación (Z/X para eje Z - Trabajo, C/V para eje X - Avance)
         if (canRotate) {
-            if (keysPressed['z']) toolRotation.x += rotationSpeed * deltaTime;
-            if (keysPressed['x']) toolRotation.x -= rotationSpeed * deltaTime;
-            if (keysPressed['c']) toolRotation.z += rotationSpeed * deltaTime;
-            if (keysPressed['v']) toolRotation.z -= rotationSpeed * deltaTime;
+            // Ajustar el ángulo de TRABAJO (Z y X) - Ahora rota sobre el eje Z (lateral)
+            if (keysPressed['z']) toolRotation.z += rotationSpeed * deltaTime;
+            if (keysPressed['x']) toolRotation.z -= rotationSpeed * deltaTime;
+            
+            // Ajustar el ángulo de AVANCE (C y V) - Ahora rota sobre el eje X (longitudinal)
+            if (currentSimState !== SIM_STATES.ANGLE) {
+                if (keysPressed['c']) toolRotation.x += rotationSpeed * deltaTime;
+                if (keysPressed['v']) toolRotation.x -= rotationSpeed * deltaTime;
+            }
         }
 
         // --- LÍMITES DE ROTACIÓN ...
@@ -763,22 +824,22 @@ function animate() {
             if (arcGlare) arcGlare.visible = false;
 
             // --- ACTUALIZAR INDICADORES (Modo Prep) ---
-            if (angleIndicator && distanceIndicator) {
-                const pieceContainer = scene.getObjectByName("piece-container");
-                const isT = pieceContainer?.userData.isTJoint;
-                
-                distanceIndicator.visible = !isTouching;
-                distanceIndicator.position.copy(worldTip);
-                distanceIndicator.scale.y = Math.max(0.001, distToSurface);
-                
-                angleIndicator.visible = true;
+                if (angleIndicator && distanceIndicator) {
+                    const isT = pieceContainer?.userData.isTJoint;
+                    const showIndicators = currentSimState !== SIM_STATES.START;
+                    
+                    distanceIndicator.visible = !isTouching && showIndicators;
+                    distanceIndicator.position.copy(worldTip);
+                    distanceIndicator.scale.y = Math.max(0.001, distToSurface);
+                    
+                angleIndicator.visible = showIndicators;
                 angleIndicator.position.copy(worldTip);
                 
-                // Rotar el grupo del indicador para que siempre mire a cámara lateralmente
-                angleIndicator.rotation.y = Math.PI/2; 
+                // Rotar el grupo del indicador para que esté en el plano XY (frontal)
+                angleIndicator.rotation.y = 0; 
 
                 const idealWorkAngleNormalized = isT ? Math.PI / 4 : 0; 
-                const currentWorkAngle = Math.abs(currentTool.rotation.x);
+                const currentWorkAngle = Math.abs(currentTool.rotation.z); // Usamos rotación Z (lateral)
                 const diff = Math.abs(currentWorkAngle - idealWorkAngleNormalized);
                 const errorFactor = Math.min(1, diff / 0.5);
                 
@@ -788,14 +849,18 @@ function animate() {
                     if (child.material) child.material.color.copy(indicatorColor);
                 });
 
-                // Rotar línea de referencia del electrodo y punta de flecha 2
-                const electrodeRot = Math.abs(currentTool.rotation.x);
+                // Rotar línea de referencia del electrodo y punta de flecha 2 (tangente)
+                const electrodeRot = currentTool.rotation.z;
+                // Rotamos 90 grados (PI/2) para que el ángulo 0 del indicador sea vertical
+                const indicatorAngle = electrodeRot + Math.PI/2; 
                 if (angleIndicator.userData.refLineElectrode) {
-                    angleIndicator.userData.refLineElectrode.rotation.x = -electrodeRot;
+                    angleIndicator.userData.refLineElectrode.rotation.z = indicatorAngle;
                 }
                 if (angleIndicator.children[4]) {
-                    angleIndicator.children[4].position.set(0, Math.cos(electrodeRot)*0.4, Math.sin(electrodeRot)*0.4);
-                    angleIndicator.children[4].rotation.x = -electrodeRot;
+                    const arrowX = Math.cos(indicatorAngle) * 0.4;
+                    const arrowY = Math.sin(indicatorAngle) * 0.4;
+                    angleIndicator.children[4].position.set(arrowX, arrowY, 0);
+                    angleIndicator.children[4].rotation.z = indicatorAngle + Math.PI/2; 
                 }
 
                 if (angleLabel) {
@@ -845,17 +910,22 @@ function animate() {
     }
 
     // Suavizado de cámara
-    if (camera && targetCamPos) {
-        camera.position.lerp(targetCamPos, 0.05);
-    }
-    if (controls && controls.target && targetLookAt) {
-        controls.target.lerp(targetLookAt, 0.05);
-        controls.update();
-    }
+        // Suavizado de cámara (Glide logic)
+        if (isCameraTransitioning && camera && targetCamPos && targetLookAt) {
+            camera.position.lerp(targetCamPos, 0.05);
+            if (controls) {
+                controls.target.lerp(targetLookAt, 0.05);
+            }
+            
+            // Detener el planeo si estamos muy cerca del objetivo
+            const dPos = camera.position.distanceTo(targetCamPos);
+            if (dPos < 0.01) {
+                isCameraTransitioning = false;
+            }
+        }
 
-    if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-    }
+        if (controls) controls.update();
+        if (renderer && scene && camera) renderer.render(scene, camera);
     } catch (err) {
         console.warn("Animation Loop Error:", err);
     }
