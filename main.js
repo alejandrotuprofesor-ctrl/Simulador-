@@ -21,6 +21,9 @@ let electrodeCurrentHeight = 3.5;
 let moveSpeed = 0.5;
 let rotationSpeed = 1.0;
 let lastBeadPos = new THREE.Vector3(100, 100, 100);
+let idealWeldX = -1.25; // Punto de inicio de la soldadura (longitudinal)
+let weldSpeedMultiplier = 0;
+const BASE_WELD_SPEED = 0.04; // Velocidad real aproximada (unidades/segundo)
 
 let arcLight, arcGlare, sparkParticles;
 let beadContainer;
@@ -113,13 +116,20 @@ function initUI() {
 
     if (ui.sliderLong) {
         ui.sliderLong.addEventListener('input', (e) => {
-            targetToolOffset.x = parseFloat(e.target.value);
+            if (currentSimState === SIM_STATES.WELDING) {
+                // Durante la soldadura, controla la velocidad (0 a 4x)
+                // El slider está mapeado de 0 a 1 en el HTML durante el paso WELDING
+                weldSpeedMultiplier = parseFloat(e.target.value) * 4;
+            } else {
+                targetToolOffset.x = parseFloat(e.target.value);
+            }
         });
     }
 
     if (ui.sliderVert) {
         ui.sliderVert.addEventListener('input', (e) => {
-            targetToolOffset.y = parseFloat(e.target.value);
+            // Geared down 10x: 10 units on slider = 1 units in simulation
+            targetToolOffset.y = parseFloat(e.target.value) / 10;
         });
     }
 }
@@ -186,9 +196,9 @@ function setSimState(newState) {
             break;
 
         case SIM_STATES.POSITION:
-            updateHud("Paso 1: Posicionamiento", isMobileDevice ?
-                "Mueve la punta al <b>círculo verde</b>." :
-                "Usa <b>A, W, S, D</b> para ir al <b>círculo verde</b>.");
+            updateHud("Paso 1: Ubicación", isMobileDevice ?
+                "<b>Mueve el electrodo</b> hacia el círculo amarillo." :
+                "Usa <b>A, S, D, W</b> para ubicar el electrodo en el inicio.");
             
             if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
 
@@ -196,8 +206,8 @@ function setSimState(newState) {
             ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO AVANCE";
             if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VOLVER"; 
             ui.btnStartWeld.style.display = 'none';
-            targetCamPos.set(-2, 1.5, 2);
-            targetLookAt.set(-1.25, 0.2, 0);
+            targetCamPos.set(1.5, 1.5, 1.5);
+            targetLookAt.set(-1.25, 0.4, 0);
             break;
 
         case SIM_STATES.AVANCE:
@@ -243,35 +253,58 @@ function setSimState(newState) {
             break;
 
         case SIM_STATES.READY:
-            ui.instrTitle.textContent = "Paso 5: ¡Listo!";
-            ui.instrDesc.textContent = isMobileDevice ?
-                "Mantén pulsado SOLDAR para empezar." :
-                "Asegúrate de que la punta toque ligeramente la pieza.";
+            updateHud("Paso 5: Soldadura", "Baja el electrodo lentamente hasta que toque la chapa para iniciar el arco.");
             if (ui.mobileControls) ui.mobileControls.style.display = 'none';
             ui.btnNextStep.style.display = 'none';
-            ui.btnStartWeld.style.display = 'block';
-            ui.btnStartWeld.textContent = "EMPEZAR A SOLDAR";
+            ui.btnStartWeld.style.display = 'none'; 
             if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
+            
             // Sincronizar sliders con posición actual
             if (ui.sliderLong) ui.sliderLong.value = toolOffset.x.toFixed(3);
-            if (ui.sliderVert) ui.sliderVert.value = toolOffset.y.toFixed(3);
+            if (ui.sliderVert) ui.sliderVert.value = (toolOffset.y * 10).toFixed(3);
             
             targetCamPos.set(3, 2, 3); // Vista completa
             targetLookAt.set(0, 0.4, 0);
+            
+            // Si ya está tocando, pasar directamente a WELDING
+            // (Se comprobará en el animate loop)
             break;
 
         case SIM_STATES.WELDING:
-            ui.instrTitle.textContent = "Simulación en Curso";
-            ui.instrDesc.textContent = isMobileDevice ?
-                "Suelta para terminar." :
-                "Mantén presionado para generar el arco.";
+            updateHud("Paso 5: Soldadura", "Baja el electrodo hasta tocar la chapa para empezar a soldar automáticamente.");
             ui.btnNextStep.style.display = 'none';
-            ui.btnStartWeld.style.display = 'block';
-            ui.btnStartWeld.textContent = "TERMINAR";
+            ui.btnStartWeld.style.display = 'none'; 
             if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
+            
+            // CONFIGURAR SLIDER PARA VELOCIDAD (Throttle)
+            if (ui.sliderLong) {
+                ui.sliderLong.min = "0";
+                ui.sliderLong.max = "1";
+                ui.sliderLong.step = "0.01";
+                ui.sliderLong.value = "0";
+                weldSpeedMultiplier = 0;
+            }
+            
+            // Reiniciar posición ideal de soldadura
+            idealWeldX = -1.25; 
+            const weldMarker = scene.getObjectByName("start-marker");
+            if (weldMarker) {
+                weldMarker.visible = true;
+                weldMarker.position.x = idealWeldX;
+                weldMarker.position.z = 0;
+                weldMarker.material.color.setHex(0x00ff00); // Verde inicial (esperando contacto)
+                weldMarker.material.opacity = 0.6;
+            }
             break;
     }
     if (controls) controls.update();
+    
+    // Restaurar atributos del slider si salimos de WELDING
+    if (newState !== SIM_STATES.WELDING && ui.sliderLong) {
+        ui.sliderLong.min = "-1.25";
+        ui.sliderLong.max = "1.25";
+        ui.sliderLong.step = "0.001";
+    }
 }
 
 function updateHud(title, desc) {
@@ -852,21 +885,30 @@ function animate() {
 
         // Izquierda / Derecha (A/D) / Adelante / Atrás (W/S)
         if (canMoveH) {
-            // Teclado
-            if (keysPressed['a']) targetToolOffset.x -= moveSpeed * deltaTime;
-            if (keysPressed['d']) targetToolOffset.x += moveSpeed * deltaTime;
-            if (keysPressed['w']) targetToolOffset.z -= moveSpeed * deltaTime;
-            if (keysPressed['s']) targetToolOffset.z += moveSpeed * deltaTime;
+            if (currentSimState === SIM_STATES.WELDING && isWelding) {
+                // MOVIMIENTO POR VELOCIDAD durante la soldadura
+                targetToolOffset.x += BASE_WELD_SPEED * weldSpeedMultiplier * deltaTime;
+                
+                // Limitar al final de la pieza
+                targetToolOffset.x = Math.min(1.25, targetToolOffset.x);
+            } else if (currentSimState !== SIM_STATES.WELDING) {
+                // Teclado (Normal en preparación)
+                if (keysPressed['a']) targetToolOffset.x -= moveSpeed * deltaTime;
+                if (keysPressed['d']) targetToolOffset.x += moveSpeed * deltaTime;
+                if (keysPressed['w']) targetToolOffset.z -= moveSpeed * deltaTime;
+                if (keysPressed['s']) targetToolOffset.z += moveSpeed * deltaTime;
 
-            // Móvil Proporcional (Mueve en eje X lateralmente)
-            if (isMobileDevice) {
-                targetToolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+                // Móvil Proporcional (Mueve en eje X lateralmente)
+                if (isMobileDevice) {
+                    targetToolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+                }
             }
         }
         
         // Arriba / Abajo (Q/E)
         if (canMoveV) {
-            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.2 : 0.5; 
+            // Ultra-fino: 0.05 de sensibilidad para el paso de separación
+            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.05 : 0.5; 
             const stepMoveSpeed = moveSpeed * sensitivity;
 
             // Teclado
@@ -959,6 +1001,11 @@ function animate() {
         // --- LÓGICA DE CONTACTO Y ARCO ---
         const distToSurface = worldTip.y - plateThickness; 
         const isTouching = distToSurface < 0.01;
+
+        // Auto-transición de READY a WELDING al tocar
+        if (currentSimState === SIM_STATES.READY && isTouching) {
+            setSimState(SIM_STATES.WELDING);
+        }
         
         // Validación Paso 1: Posicionamiento inicial
         if (currentSimState === SIM_STATES.POSITION) {
@@ -996,20 +1043,52 @@ function animate() {
             }
         }
 
-        // Soldadura activa solo en estado WELDING y con botón presionado
-        const canWeld = currentSimState === SIM_STATES.WELDING && isWeldButtonPressed && isTouching;
+        // Soldadura activa solo en estado WELDING y al tocar la chapa (Auto-start)
+        const canWeld = currentSimState === SIM_STATES.WELDING && isTouching;
         isWelding = canWeld; // Actualizar flag global para efectos visuales
+
+        if (currentSimState === SIM_STATES.WELDING) {
+            // --- LÓGICA DE AVANCE IDEAL (Siempre visible en Paso 5) ---
+            if (isWelding) {
+                idealWeldX += BASE_WELD_SPEED * deltaTime;
+                idealWeldX = Math.min(1.25, idealWeldX);
+            }
+
+            const weldMarker = scene.getObjectByName("start-marker");
+            if (weldMarker) {
+                weldMarker.visible = true;
+                weldMarker.position.x = idealWeldX;
+                weldMarker.position.z = 0; 
+                
+                // Comprobar proximidad
+                const distToIdeal = Math.abs(worldTip.x - idealWeldX);
+                const isInside = distToIdeal < 0.12; 
+                
+                // Solo mostrar verde/rojo si estamos soldando, de lo contrario verde (espera)
+                if (isWelding) {
+                    weldMarker.material.color.setHex(isInside ? 0x00ff00 : 0xff0000);
+                } else {
+                    weldMarker.material.color.setHex(0x00ff00); // Verde esperando el primer contacto
+                }
+                
+                const pulse = 1 + Math.sin(performance.now() * 0.01) * 0.2;
+                const scale = (isInside && isWelding) ? 0.8 : pulse;
+                weldMarker.scale.set(scale, scale, scale);
+                weldMarker.material.opacity = (isInside && isWelding) ? 0.8 : 0.4;
+            }
+        }
 
         if (canWeld) {
             // 1. EFECTOS DE ARCO
-            if (arcLight) {
-                arcLight.intensity = 5 + Math.random() * 5;
-                arcLight.color.setHSL(0.55, 1, 0.5 + Math.random() * 0.5);
-            }
+            if (arcLight) arcLight.intensity = (0.5 + Math.random() * 0.5) * 5; 
             if (arcGlare) {
                 arcGlare.visible = true;
-                arcGlare.scale.set(0.2 + Math.random() * 0.2, 0.2 + Math.random() * 0.2, 1);
+                const s = 0.3 + Math.random() * 0.3;
+                arcGlare.scale.set(s, s, 1);
             }
+            
+            // El movimiento por velocidad ya se maneja en el bloque de canMoveH
+            // pero nos aseguramos de que solo ocurra si isWelding es true.
 
             // 2. CONSUMO DE ELECTRODO
             const consumeAmount = consumptionRate * deltaTime;
