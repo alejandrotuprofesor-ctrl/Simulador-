@@ -93,20 +93,21 @@ canvas {
 
 #result-screen .hud-instructions {
     position: absolute;
-    top: 60px; /* Aligned below the top HUD bar */
-    width: 95%; /* Use full width for the bar */
+    top: 38px; /* Moved even higher to stay pinned to the top bar */
+    width: 95%; 
     max-width: 1000px;
-    padding: 0.4rem 1rem;
+    padding: 2px 1rem 4px 1rem; /* Extremely narrow top padding */
     pointer-events: auto;
     display: flex;
     flex-direction: row; /* Horizontal layout */
-    align-items: center;
+    align-items: flex-start; /* Pinned to top as requested */
     justify-content: center;
     text-align: left;
     background: rgba(10, 10, 15, 0.6);
     backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
-    border-radius: 10px;
+    border-top: none; /* Seamless connection with top bar */
+    border-radius: 0 0 10px 10px; /* Only bottom rounded */
 }
 
 #result-screen #visual-summary {
@@ -145,26 +146,45 @@ canvas {
 
 .result-actions {
     position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: 0;
+    left: 0;
+    width: 100%;
     display: flex;
-    gap: 1.5rem;
+    flex-direction: row;
+    gap: 0;
     pointer-events: auto;
-    width: auto;
-    justify-content: center;
+    z-index: 60;
+    background: rgba(10, 10, 15, 0.95);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.8);
 }
 
-#btn-restart {
-    margin-top: 0;
+#btn-results-back, #btn-restart {
+    flex: 1;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid var(--neon-blue);
+    padding: 0.8rem; /* Reduced height as requested */
     font-size: 0.9rem;
-    padding: 0.6rem 2rem;
+    transition: all 0.3s ease;
 }
 
 #btn-results-back {
-    margin-top: 0;
-    font-size: 0.9rem;
-    padding: 0.6rem 2rem;
+    border-top-color: var(--neon-purple);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-info {
+    position: absolute;
+    bottom: 75px; /* Adjusted to middle ground as requested */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8rem; /* Larger text as requested */
+    opacity: 0.8; /* Higher opacity */
+    color: var(--text-primary);
+    pointer-events: none;
+    z-index: 55;
+    white-space: nowrap;
 }
 
 .btn-futuristic.secondary {
@@ -345,8 +365,10 @@ canvas {
 #sim-controls {
     display: flex;
     gap: 0.8rem;
-    justify-content: flex-end;
+    justify-content: center; /* Centered buttons as requested */
     align-items: center;
+    margin-left: 2rem; /* Added space between instructions and buttons */
+    margin-top: 4px; /* Slight offset to look better with flex-start text */
 }
 
 #btn-next-step {
@@ -377,6 +399,77 @@ canvas {
     background: #ff4444;
     color: #fff;
     box-shadow: 0 0 25px #ff4444;
+}
+
+/* Welding Sliders - Full Width Bottom Bar */
+.welding-sliders-container {
+    position: absolute;
+    bottom: 80px; /* Aligned above the result actions */
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    align-items: center;
+    background: rgba(10, 10, 15, 0.9);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--neon-blue);
+    padding: 1rem 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    pointer-events: auto;
+}
+
+.slider-group {
+    flex: 1; /* Divide width equally */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 1rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slider-group:last-child {
+    border-right: none;
+}
+
+.slider-group label {
+    font-size: 0.7rem;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+}
+
+.slider-group input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 80%; /* Takes most of the half-width */
+    max-width: 400px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    outline: none;
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: var(--neon-blue);
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 0 15px var(--neon-blue);
+}
+
+.slider-group input[type="range"]::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: var(--neon-blue);
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 0 15px var(--neon-blue);
+    border: none;
 }
 
 @keyframes slideUp {
@@ -451,13 +544,13 @@ body.is-mobile .mobile-only {
     }
     
     .result-actions {
-        bottom: 20px;
-        gap: 0.8rem;
+        bottom: 0;
+        gap: 0;
     }
     
     #btn-restart, #btn-results-back {
-        padding: 0.5rem 1rem;
-        font-size: 0.8rem;
+        padding: 1rem;
+        font-size: 0.75rem;
     }
 
     .mobile-only {

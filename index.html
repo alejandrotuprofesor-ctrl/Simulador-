@@ -36,7 +36,6 @@
                 <div id="options-gallery" class="options-grid">
                     <!-- Injected by JS -->
                 </div>
-            </div>
         </section>
 
         <!-- Pantalla Final / Resumen Visual -->
@@ -59,6 +58,17 @@
                     <button id="btn-start-weld" class="btn-futuristic">EMPEZAR A SOLDAR</button>
                 </div>
             </div>
+            
+            <div id="welding-sliders" class="welding-sliders-container" style="display: none;">
+                <div class="slider-group">
+                    <label class="hud-text">AVANCE (X)</label>
+                    <input type="range" id="slider-longitudinal" min="-1.25" max="1.25" step="0.001" value="0">
+                </div>
+                <div class="slider-group">
+                    <label class="hud-text">ALTURA (Y)</label>
+                    <input type="range" id="slider-vertical" min="-1.0" max="0.5" step="0.001" value="0">
+                </div>
+            </div>
 
             <!-- CONTROLES TÁCTILES (Móvil) - Joystick Proporcional -->
             <div id="mobile-controls" class="mobile-only">
@@ -78,7 +88,7 @@
             </div>
         </section>
 
-        <div class="footer-info">SYSTEM STATUS: OPTIMAL | © 2026 APRENDER CADA DÍA</div>
+        <div class="footer-info">© 2026 APRENDER CADA DÍA</div>
     </div>
 
     <!-- Load Three.js Global Version (r145 for OrbitControls support) -->

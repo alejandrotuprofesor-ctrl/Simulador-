@@ -11,7 +11,9 @@ let isWelding = false;
 let isWeldButtonPressed = false;
 let keysPressed = {};
 let toolOffset = { x: 0, y: 0, z: 0 };
+let targetToolOffset = { x: 0, y: 0, z: 0 };
 let toolRotation = { x: 0, z: 0 };
+let targetToolRotation = { x: 0, z: 0 };
 let plateThickness = 0.1;
 let consumptionRate = 0.05;
 let electrodeInitialHeight = 3.5;
@@ -69,7 +71,10 @@ function initUI() {
         // Mobile containers
         mobileControls: document.getElementById('mobile-controls'),
         joystickKnob: document.getElementById('joystick-knob'),
-        universalJoystick: document.getElementById('universal-joystick')
+        universalJoystick: document.getElementById('universal-joystick'),
+        weldingSliders: document.getElementById('welding-sliders'),
+        sliderLong: document.getElementById('slider-longitudinal'),
+        sliderVert: document.getElementById('slider-vertical')
     };
 
     // Initialize Proportional Joystick
@@ -105,6 +110,18 @@ function initUI() {
         ui.btnStartWeld.addEventListener('touchstart', () => isWeldButtonPressed = true, {passive: false});
         ui.btnStartWeld.addEventListener('touchend', () => isWeldButtonPressed = false);
     }
+
+    if (ui.sliderLong) {
+        ui.sliderLong.addEventListener('input', (e) => {
+            targetToolOffset.x = parseFloat(e.target.value);
+        });
+    }
+
+    if (ui.sliderVert) {
+        ui.sliderVert.addEventListener('input', (e) => {
+            targetToolOffset.y = parseFloat(e.target.value);
+        });
+    }
 }
 
 function nextSimStep() {
@@ -139,11 +156,18 @@ function setSimState(newState) {
     isCameraTransitioning = true; // Activar planeo de cámara
     console.log("Cambiando estado simulación a:", newState);
 
+    // Sincronizar SIEMPRE los targets con el valor actual en CUALQUIER cambio de estado
+    targetToolOffset.x = toolOffset.x;
+    targetToolOffset.y = toolOffset.y;
+    targetToolOffset.z = toolOffset.z;
+    targetToolRotation.x = toolRotation.x;
+    targetToolRotation.z = toolRotation.z;
+
     const pieceContainer = scene ? scene.getObjectByName("piece-container") : null;
     const isT = pieceContainer?.userData.isTJoint;
     
     // Ocultar todos los grupos móviles por defecto
-
+    if (ui.weldingSliders) ui.weldingSliders.style.display = 'none';
 
     const marker = scene ? scene.getObjectByName("start-marker") : null;
     if (marker) marker.visible = (newState === SIM_STATES.POSITION);
@@ -227,6 +251,12 @@ function setSimState(newState) {
             ui.btnNextStep.style.display = 'none';
             ui.btnStartWeld.style.display = 'block';
             ui.btnStartWeld.textContent = "EMPEZAR A SOLDAR";
+            if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
+            // Sincronizar sliders con posición actual
+            if (ui.sliderLong) ui.sliderLong.value = toolOffset.x.toFixed(3);
+            if (ui.sliderVert) ui.sliderVert.value = toolOffset.y.toFixed(3);
+            
+            targetCamPos.set(3, 2, 3); // Vista completa
             targetLookAt.set(0, 0.4, 0);
             break;
 
@@ -238,6 +268,7 @@ function setSimState(newState) {
             ui.btnNextStep.style.display = 'none';
             ui.btnStartWeld.style.display = 'block';
             ui.btnStartWeld.textContent = "TERMINAR";
+            if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
             break;
     }
     if (controls) controls.update();
@@ -479,10 +510,12 @@ function update3DModel() {
     const oldTool = scene.getObjectByName("current-tool");
     const oldBeads = scene.getObjectByName("bead-container");
     const oldMarker = scene.getObjectByName("start-marker");
+    const oldDistLabel = scene.getObjectByName("distance-label");
     if (oldPiece) scene.remove(oldPiece);
     if (oldTool) scene.remove(oldTool);
     if (oldBeads) scene.remove(oldBeads);
     if (oldMarker) scene.remove(oldMarker);
+    if (oldDistLabel) scene.remove(oldDistLabel);
     
     // Limpiar indicadores previos
     if (angleIndicator) scene.remove(angleIndicator);
@@ -758,16 +791,14 @@ function update3DModel() {
     dlctx.font = 'Black 130px Orbitron, Arial'; // Massive font
     dlctx.textAlign = 'center';
     dlctx.fillStyle = '#ffffff';
-    dlctx.strokeStyle = '#000000';
-    dlctx.lineWidth = 8;
-    dlctx.strokeText('0 mm', 256, 110);
     dlctx.fillText('0 mm', 256, 110);
     const distLabelTex = new THREE.CanvasTexture(distLabelCanvas);
     const distLabelMat = new THREE.SpriteMaterial({ map: distLabelTex, transparent: true, depthTest: false }); 
     const distLabel = new THREE.Sprite(distLabelMat);
+    distLabel.name = "distance-label";
     distLabel.scale.set(0.8, 0.25, 1); // Mega scale
-    distLabel.position.set(0.15, -0.5, 0); // Positioned at local midpoint
-    distanceIndicator.add(distLabel);
+    distLabel.visible = false;
+    scene.add(distLabel);
     distanceIndicator.userData.label = distLabel;
 
     scene.add(distanceIndicator);
@@ -803,6 +834,14 @@ function animate() {
 
     try {
 
+    const lerpFactor = 15.0; // Increased from 3.0 to 15.0 for much higher responsiveness
+    toolOffset.x += (targetToolOffset.x - toolOffset.x) * lerpFactor * deltaTime;
+    toolOffset.y += (targetToolOffset.y - toolOffset.y) * lerpFactor * deltaTime;
+    toolOffset.z += (targetToolOffset.z - toolOffset.z) * lerpFactor * deltaTime;
+
+    toolRotation.x += (targetToolRotation.x - toolRotation.x) * lerpFactor * deltaTime;
+    toolRotation.z += (targetToolRotation.z - toolRotation.z) * lerpFactor * deltaTime;
+
     // Lógica de movimiento de la herramienta
     const currentTool = scene.getObjectByName("current-tool");
     if (currentTool) {
@@ -814,30 +853,29 @@ function animate() {
         // Izquierda / Derecha (A/D) / Adelante / Atrás (W/S)
         if (canMoveH) {
             // Teclado
-            if (keysPressed['a']) toolOffset.x -= moveSpeed * deltaTime;
-            if (keysPressed['d']) toolOffset.x += moveSpeed * deltaTime;
-            if (keysPressed['w']) toolOffset.z -= moveSpeed * deltaTime;
-            if (keysPressed['s']) toolOffset.z += moveSpeed * deltaTime;
+            if (keysPressed['a']) targetToolOffset.x -= moveSpeed * deltaTime;
+            if (keysPressed['d']) targetToolOffset.x += moveSpeed * deltaTime;
+            if (keysPressed['w']) targetToolOffset.z -= moveSpeed * deltaTime;
+            if (keysPressed['s']) targetToolOffset.z += moveSpeed * deltaTime;
 
             // Móvil Proporcional (Mueve en eje X lateralmente)
             if (isMobileDevice) {
-                toolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+                targetToolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
             }
         }
         
         // Arriba / Abajo (Q/E)
         if (canMoveV) {
-            // Sensibilidad reducida para el paso de SEPARACIÓN
-            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.2 : 1.0;
+            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.2 : 0.5; 
             const stepMoveSpeed = moveSpeed * sensitivity;
 
             // Teclado
-            if (keysPressed['q']) toolOffset.y += stepMoveSpeed * deltaTime;
-            if (keysPressed['e']) toolOffset.y -= stepMoveSpeed * deltaTime;
+            if (keysPressed['q']) targetToolOffset.y += stepMoveSpeed * deltaTime;
+            if (keysPressed['e']) targetToolOffset.y -= stepMoveSpeed * deltaTime;
 
-            // Móvil Proporcional (Mueve en eje Y verticalmente)
+            // Móvil Proporcional 
             if (isMobileDevice) {
-                toolOffset.y += mobileDisplacement * stepMoveSpeed * deltaTime;
+                targetToolOffset.y += mobileDisplacement * stepMoveSpeed * deltaTime;
             }
         }
 
@@ -846,24 +884,25 @@ function animate() {
             // Paso: ÁNGULO DE AVANCE (C/V - Longitudinal - Eje Z)
             const isAvance = currentSimState === SIM_STATES.AVANCE || currentSimState >= SIM_STATES.WELDING;
             if (isAvance) {
-                if (keysPressed['c']) toolRotation.z += rotationSpeed * deltaTime;
-                if (keysPressed['v']) toolRotation.z -= rotationSpeed * deltaTime;
+                // REVERTIDO: Invertido el sentido de rotación en Paso 2
+                if (keysPressed['c']) targetToolRotation.z -= rotationSpeed * deltaTime;
+                if (keysPressed['v']) targetToolRotation.z += rotationSpeed * deltaTime;
                 
                 // Móvil Proporcional
                 if (isMobileDevice) {
-                    toolRotation.z += mobileDisplacement * rotationSpeed * deltaTime;
+                    targetToolRotation.z -= mobileDisplacement * rotationSpeed * deltaTime;
                 }
             }
             
             // Paso: ÁNGULO DE TRABAJO (Z/X - Lateral - Eje X)
             const isTrabajo = currentSimState === SIM_STATES.TRABAJO || currentSimState >= SIM_STATES.WELDING;
             if (isTrabajo) {
-                if (keysPressed['z']) toolRotation.x += rotationSpeed * deltaTime;
-                if (keysPressed['x']) toolRotation.x -= rotationSpeed * deltaTime;
+                if (keysPressed['z']) targetToolRotation.x += rotationSpeed * deltaTime;
+                if (keysPressed['x']) targetToolRotation.x -= rotationSpeed * deltaTime;
 
                 // Móvil Proporcional
                 if (isMobileDevice) {
-                    toolRotation.x += mobileDisplacement * rotationSpeed * deltaTime;
+                    targetToolRotation.x += mobileDisplacement * rotationSpeed * deltaTime;
                 }
             }
         }
@@ -976,6 +1015,10 @@ function animate() {
             const consumeAmount = consumptionRate * deltaTime;
             electrodeCurrentHeight -= consumeAmount;
             if (electrodeCurrentHeight < 0.2) electrodeCurrentHeight = 0.2;
+            
+            // Reducir el target de altura por la cantidad consumida para obligar al usuario a bajar
+            targetToolOffset.y -= consumeAmount;
+            if (ui.sliderVert) ui.sliderVert.value = targetToolOffset.y.toFixed(3);
 
             const electrodeMesh = currentTool.children[0];
             if (electrodeMesh) {
@@ -1006,6 +1049,8 @@ function animate() {
             if (angleIndicator) angleIndicator.visible = false;
             if (angleLabel) angleLabel.visible = false;
             if (distanceIndicator) distanceIndicator.visible = false;
+            const dLabel = scene.getObjectByName("distance-label");
+            if (dLabel) dLabel.visible = false;
 
         } else {
             if (arcLight) arcLight.intensity = 0;
@@ -1049,32 +1094,31 @@ function animate() {
 
                     const distLabel = distanceIndicator.userData.label;
                     if (distLabel) {
+                        distLabel.visible = true;
                         const lctx = distLabel.material.map.image.getContext('2d');
                         lctx.clearRect(0, 0, 512, 160);
                         lctx.font = 'Black 130px Orbitron, Arial'; // Massive font
                         lctx.fillStyle = `#${new THREE.Color(cotaColor).getHexString()}`;
-                        lctx.strokeStyle = '#000000';
-                        lctx.lineWidth = 8;
                         const text = isPerfect ? "3 mm Perfecto" : `${distMm} mm`;
-                        lctx.strokeText(text, 256, 110);
                         lctx.fillText(text, 256, 110);
                         distLabel.material.map.needsUpdate = true;
                         
                         // Sprite siempre mira a cámara
                         distLabel.quaternion.copy(camera.quaternion);
                         
-                        // Aplicar rotación adicional de 90º en Z (local) para que el texto sea vertical
-                        const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
-                        distLabel.quaternion.multiply(qZ);
-                        
-                        // Centrado dinámico en la mitad de la separación
-                        distLabel.position.set(0.18, -0.5, 0); // -0.5 es el centro de la línea que va de 0 a -1 (escalada por heightVal)
+                        // Posicionamiento en el espacio del mundo (centrado en el hueco)
+                        // Offset extremadamente pequeño en X para estar pegado a la línea
+                        const labelOffset = new THREE.Vector3(-0.04, -0.5 * heightVal, 0.01);
+                        distLabel.position.copy(worldTip).add(labelOffset);
 
                         // Update line colors
                         distanceIndicator.children.forEach(c => {
                             if (c.isMesh) c.material.color.setHex(cotaColor);
                         });
                     }
+                } else {
+                    const distLabel = distanceIndicator.userData.label;
+                    if (distLabel) distLabel.visible = false;
                 }
                 
                 // Mostrar ÁNGULO solo en pasos 2 y 3
