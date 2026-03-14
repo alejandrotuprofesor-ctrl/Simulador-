@@ -479,13 +479,7 @@ canvas {
     border: none;
 }
 
-/* Fluid side-to-side for standard slider thumbs */
-input[type=range].cta-animate-slide::-webkit-slider-thumb {
-    animation: cta-slide-x 1.2s infinite ease-in-out !important;
-}
-input[type=range].cta-animate-slide::-moz-range-thumb {
-    animation: cta-slide-x 1.2s infinite ease-in-out !important;
-}
+/* Removed cta-slide-x from thumbs to allow JS control during demos */
 
 @keyframes slideUp {
     from { transform: translateY(20px); opacity: 0; }
@@ -502,9 +496,63 @@ input[type=range].cta-animate-slide::-moz-range-thumb {
     z-index: 30;
 }
 
-body.is-mobile .mobile-only {
-    display: flex;
+body.is-mobile .mobile-only,
+#result-screen .mobile-only {
+    display: flex !important;
     justify-content: center;
+}
+
+/* Joystick Proporcional - Siempre disponible si se muestra el contenedor */
+.joystick-container {
+    width: 90%;
+    max-width: 600px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid var(--neon-blue);
+    border-radius: 30px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
+    touch-action: none; /* Crucial para evitar scroll al tocar */
+}
+
+.joystick-knob {
+    width: 50px;
+    height: 50px;
+    background: var(--neon-blue);
+    border-radius: 50%;
+    box-shadow: 0 0 15px var(--neon-blue);
+    cursor: pointer;
+    position: absolute;
+    left: calc(50% - 25px); /* Centro dinámico */
+    transition: transform 0.1s ease-out;
+    z-index: 5;
+}
+
+.joystick-center-line {
+    position: absolute;
+    width: 2px;
+    height: 30px;
+    background: rgba(0, 243, 255, 0.3);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.joystick-arrows {
+    position: absolute;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    box-sizing: border-box;
+    font-size: 1.2rem;
+    color: var(--neon-blue);
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .touch-group {
@@ -571,82 +619,29 @@ body.is-mobile .mobile-only {
     .mobile-only {
         bottom: 100px;
     }
-
-    /* Joystick Proporcional */
-    .joystick-container {
-        width: 90%;
-        max-width: 600px;
-        height: 60px;
-        background: rgba(0, 0, 0, 0.4);
-        border: 2px solid var(--neon-blue);
-        border-radius: 30px;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        pointer-events: auto;
-        backdrop-filter: blur(8px);
-        box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
-        touch-action: none; /* Crucial para evitar scroll al tocar */
-    }
-
-    .joystick-knob {
-        width: 50px;
-        height: 50px;
-        background: var(--neon-blue);
-        border-radius: 50%;
-        box-shadow: 0 0 15px var(--neon-blue);
-        cursor: pointer;
-        position: absolute;
-        left: calc(50% - 25px); /* Centro dinámico */
-        transition: transform 0.1s ease-out;
-        z-index: 5;
-    }
-
-    .joystick-center-line {
-        position: absolute;
-        width: 2px;
-        height: 30px;
-        background: rgba(0, 243, 255, 0.3);
-        left: 50%;
-        transform: translateX(-50%);
-    }
-
-    .joystick-arrows {
-        position: absolute;
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 20px;
-        box-sizing: border-box;
-        font-size: 1.2rem;
-        color: var(--neon-blue);
-        opacity: 0.5;
-        pointer-events: none;
-    }
 }
 
 @keyframes cta-pulse {
-    0% { transform: scale(1); box-shadow: 0 0 10px var(--neon-blue); }
-    50% { transform: scale(1.05); box-shadow: 0 0 30px var(--neon-blue), 0 0 50px rgba(0, 243, 255, 0.4); }
-    100% { transform: scale(1); box-shadow: 0 0 10px var(--neon-blue); }
+    0% { box-shadow: 0 0 10px var(--neon-blue); }
+    50% { box-shadow: 0 0 30px var(--neon-blue), 0 0 50px rgba(0, 243, 255, 0.4); }
+    100% { box-shadow: 0 0 10px var(--neon-blue); }
 }
 
 @keyframes cta-slide-x {
-    0%, 100% { transform: translateX(-15px); }
-    50% { transform: translateX(15px); }
+    0%, 100% { transform: translateX(-20px); }
+    50% { transform: translateX(20px); }
 }
 
 .cta-animate {
-    animation: cta-pulse 1.5s infinite ease-in-out !important;
+    animation: cta-pulse 2.5s infinite ease-in-out !important;
     border-color: var(--neon-blue) !important;
     color: var(--neon-blue) !important;
     z-index: 100;
 }
 
 .cta-animate-slide {
-    animation: cta-slide-x 1.2s infinite ease-in-out !important;
-    box-shadow: 0 0 30px var(--neon-blue) !important;
+    animation: cta-pulse 2.5s infinite ease-in-out !important;
+    box-shadow: 0 0 40px var(--neon-blue) !important;
     z-index: 100;
 }
 

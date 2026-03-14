@@ -23,7 +23,9 @@ let rotationSpeed = 1.0;
 let lastBeadPos = new THREE.Vector3(100, 100, 100);
 let idealWeldX = -1.25; // Punto de inicio de la soldadura (longitudinal)
 let weldSpeedMultiplier = 0;
-let avanceIntroTime = 0; // Para animación automática en Paso 2
+let stepIntroTime = 0; // Para animación automática en los pasos de ajuste
+let smoothDemoInput = 0; // Valor suavizado para la UI de los mandos en las demos
+let isWaitingForCam = false; 
 const BASE_WELD_SPEED = 0.04; // Velocidad real aproximada (unidades/segundo)
 
 let arcLight, arcGlare, sparkParticles;
@@ -32,6 +34,49 @@ let angleIndicator, angleLabel, distanceIndicator, genialLabel;
 
 // Cámara gliding
 let isCameraTransitioning = false;
+
+// --- SISTEMA DE AUDIO UI ---
+let audioCtx;
+function playClickSound() {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const now = audioCtx.currentTime;
+        
+        // --- Capa 1: Pulso Mecánico (El "Click") ---
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'square'; // Onda cuadrada para ese toque "retro/robot"
+        osc1.frequency.setValueAtTime(150, now);
+        osc1.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+        
+        gain1.gain.setValueAtTime(0.05, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        
+        // --- Capa 2: Servo/Digital (El "Robótico") ---
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(800, now);
+        osc2.frequency.exponentialRampToValueAtTime(1200, now + 0.05);
+        
+        gain2.gain.setValueAtTime(0.03, now);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        
+        osc1.start(now);
+        osc1.stop(now + 0.1);
+        osc2.start(now);
+        osc2.stop(now + 0.05);
+        
+    } catch(e) { console.warn("Audio Context error:", e); }
+}
 
 // Esperar a que el DOM esté listo
 window.addEventListener('DOMContentLoaded', () => {
@@ -44,6 +89,14 @@ window.addEventListener('DOMContentLoaded', () => {
     initUI();
     init();
     animate();
+
+    // Listener global para sonidos de UI
+    document.addEventListener('mousedown', (e) => {
+        const target = e.target;
+        if (target.tagName === 'BUTTON' || target.closest('button') || target.closest('.option-card')) {
+            playClickSound();
+        }
+    });
 });
 
 function checkIfMobile() {
@@ -214,72 +267,84 @@ function setSimState(newState) {
             break;
 
         case SIM_STATES.POSITION:
-            updateHud("Paso 1: Ubicación", isMobileDevice ?
-                "<b>Mueve el electrodo</b> hacia el círculo verde." :
-                "Usa <b>A, S, D, W</b> para ubicar el electrodo en el inicio.");
+            console.log("Entering POSITION state");
+            stepIntroTime = 4.0; 
+            isWaitingForCam = true; 
+            updateHud("Paso 1: Ubicación", "<b>Mueve el electrodo</b> hacia el círculo verde.");
             
-            if (isMobileDevice && ui.mobileControls) {
-                ui.mobileControls.style.display = 'flex';
-                if (ui.joystickKnob) ui.joystickKnob.classList.add('cta-animate-slide');
+            if (ui.mobileControls) ui.mobileControls.style.display = 'flex';
+            if (ui.joystickKnob) {
+                ui.joystickKnob.classList.add('cta-animate-slide');
+                ui.joystickKnob.style.transition = 'none'; 
+                ui.joystickKnob.style.transform = 'translateX(0px)';
+                smoothDemoInput = 0; // Resetear input de demo
             }
 
             ui.btnNextStep.style.display = 'none'; 
             ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO AVANCE";
-            if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VOLVER"; 
             ui.btnStartWeld.style.display = 'none';
-            targetCamPos.set(-0.625, 0.8, 2.5); // Frontal view centered on midpoint
-            targetLookAt.set(-0.625, 0.2, 0);   // Looking at the midpoint between Start (0) and Marker (-1.25)
+            targetCamPos.set(-0.625, 0.8, 2.5); 
+            targetLookAt.set(-0.625, 0.2, 0);   
+            isCameraTransitioning = true; // Activar el planeo
             break;
 
         case SIM_STATES.AVANCE:
-            avanceIntroTime = 3.0; // Demostración de -45 a 45 grados
+            console.log("Entering AVANCE state");
+            stepIntroTime = 4.0;
             updateHud("Paso 2: Ángulo de Avance", isMobileDevice ?
                 "Ajusta la <b>inclinación longitudinal</b>." :
                 "Usa <b>C</b> y <b>V</b> para inclinar el electrodo (80°).");
             
-            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
-            
+            if (ui.mobileControls) ui.mobileControls.style.display = 'flex';
             ui.btnNextStep.style.display = 'none';
-            ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO TRABAJO";
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(0, 1.0, 2.5); 
             targetLookAt.set(-1.25, 0.6, 0);
+            isCameraTransitioning = true;
             break;
 
         case SIM_STATES.TRABAJO:
+            console.log("Entering TRABAJO state");
+            stepIntroTime = 4.0;
             updateHud("Paso 3: Ángulo de Trabajo", isMobileDevice ?
                 "Ajusta la <b>inclinación lateral</b>." :
                 "Usa <b>Z</b> y <b>X</b> para inclinar el electrodo.");
             
-            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
-
+            if (ui.mobileControls) ui.mobileControls.style.display = 'flex';
             ui.btnNextStep.style.display = 'none';
-            ui.btnNextStep.textContent = "SIGUIENTE: SEPARACIÓN";
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(2.5, 1.0, 0);
             targetLookAt.set(-1.25, 0.6, 0);
+            isCameraTransitioning = true;
             break;
 
         case SIM_STATES.DISTANCE:
+            console.log("Entering DISTANCE state");
+            stepIntroTime = 10.0;
             updateHud("Paso 4: Separación", isMobileDevice ?
                 "Ajusta la altura a <b>3 mm</b>." :
                 "Usa <b>Q</b> y <b>E</b> para ajustar la altura a <b>3 mm</b>.");
             
-            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
-
+            if (ui.mobileControls) ui.mobileControls.style.display = 'flex';
             ui.btnNextStep.style.display = 'none';
-            ui.btnNextStep.textContent = "SIGUIENTE: SOLDAR";
             ui.btnStartWeld.style.display = 'none';
-            targetCamPos.set(-1.1, 0.15, 0.3); // Vista lateral extrema y cercana
-            targetLookAt.set(-1.25, 0.12, 0); // Foco exacto en el hueco
+            targetCamPos.set(-1.1, 0.15, 0.3);
+            targetLookAt.set(-1.25, 0.12, 0);
+            isCameraTransitioning = true;
             break;
 
         case SIM_STATES.READY:
+            console.log("Entering READY state");
+            stepIntroTime = 10.0;
             updateHud("Paso 5: Soldadura", "Baja el electrodo lentamente hasta que toque la chapa para iniciar el arco.");
             if (ui.mobileControls) ui.mobileControls.style.display = 'none';
             ui.btnNextStep.style.display = 'none';
             ui.btnStartWeld.style.display = 'none'; 
             if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
+            targetCamPos.set(3, 2, 3);
+            targetLookAt.set(0, 0.4, 0);
+            isCameraTransitioning = true;
+            break;
             
             // Sincronizar sliders con posición actual y animar como CTA
             if (ui.sliderLong) {
@@ -939,7 +1004,31 @@ function animate() {
 
     try {
 
-    const lerpFactor = 15.0; // Increased from 3.0 to 15.0 for much higher responsiveness
+    // --- 1. SUAVIZADO DE CÁMARA (Glide logic - siempre activo) ---
+    if (isCameraTransitioning && camera && targetCamPos && targetLookAt) {
+        camera.position.lerp(targetCamPos, 0.05);
+        if (controls) {
+            controls.target.lerp(targetLookAt, 0.05);
+        }
+        
+        // Detener el planeo si estamos muy cerca del objetivo
+        const dPos = camera.position.distanceTo(targetCamPos);
+        if (dPos < 0.01) {
+            isCameraTransitioning = false;
+        }
+    }
+
+    // --- 2. DETECTAR INTERACCIÓN (Para romper demos o esperas) ---
+    const isInteracting = keysPressed['a'] || keysPressed['d'] || keysPressed['w'] || keysPressed['s'] || 
+                         keysPressed['c'] || keysPressed['v'] || keysPressed['z'] || keysPressed['x'] || 
+                         keysPressed['q'] || keysPressed['e'] || (isMobileDevice && Math.abs(mobileDisplacement) > 0.1);
+
+    if (isInteracting) {
+        stepIntroTime = 0;
+        isWaitingForCam = false;
+    }
+
+    const lerpFactor = 15.0; // Mayor sensibilidad
     toolOffset.x += (targetToolOffset.x - toolOffset.x) * lerpFactor * deltaTime;
     toolOffset.y += (targetToolOffset.y - toolOffset.y) * lerpFactor * deltaTime;
     toolOffset.z += (targetToolOffset.z - toolOffset.z) * lerpFactor * deltaTime;
@@ -952,84 +1041,191 @@ function animate() {
     if (currentTool) {
         // Bloquear movimientos según estado
         const canRotate = currentSimState === SIM_STATES.AVANCE || currentSimState === SIM_STATES.TRABAJO || currentSimState >= SIM_STATES.WELDING;
-        const canMoveH = currentSimState === SIM_STATES.POSITION || currentSimState >= SIM_STATES.WELDING; // Movimiento horizontal (A/W/S/D)
-        const canMoveV = currentSimState === SIM_STATES.DISTANCE || currentSimState >= SIM_STATES.WELDING; // Movimiento vertical (Q/E)
+        const canMoveH = currentSimState === SIM_STATES.POSITION || currentSimState >= SIM_STATES.WELDING; 
+        const canMoveV = currentSimState === SIM_STATES.DISTANCE || currentSimState >= SIM_STATES.WELDING; 
 
-        // Izquierda / Derecha (A/D) / Adelante / Atrás (W/S)
-        if (canMoveH) {
-            if (currentSimState === SIM_STATES.WELDING && isWelding) {
-                // MOVIMIENTO POR VELOCIDAD durante la soldadura
-                targetToolOffset.x += BASE_WELD_SPEED * weldSpeedMultiplier * deltaTime;
-                
-                // Limitar al final de la pieza
-                targetToolOffset.x = Math.min(1.25, targetToolOffset.x);
-            } else if (currentSimState !== SIM_STATES.WELDING) {
-                // Teclado (Normal en preparación)
-                if (keysPressed['a']) targetToolOffset.x -= moveSpeed * deltaTime;
-                if (keysPressed['d']) targetToolOffset.x += moveSpeed * deltaTime;
-                if (keysPressed['w']) targetToolOffset.z -= moveSpeed * deltaTime;
-                if (keysPressed['s']) targetToolOffset.z += moveSpeed * deltaTime;
-
-                // Móvil Proporcional (Mueve en eje X lateralmente)
-                if (isMobileDevice) {
-                    targetToolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+        if (stepIntroTime > 0) {
+            // No mover el electrodo ni el slicer hasta que la cámara llegue al sitio
+            if (currentSimState === SIM_STATES.POSITION && isWaitingForCam) {
+                const dPos = targetCamPos ? camera.position.distanceTo(targetCamPos) : 0;
+                if (!isCameraTransitioning || dPos < 0.1) {
+                    isWaitingForCam = false;
+                    console.log("Cámara lista, iniciando demo...");
                 }
             }
-        }
-        
-        // Arriba / Abajo (Q/E)
-        if (canMoveV) {
-            // Ultra-fino: 0.05 de sensibilidad para el paso de separación
-            const sensitivity = currentSimState === SIM_STATES.DISTANCE ? 0.05 : 0.5; 
-            const stepMoveSpeed = moveSpeed * sensitivity;
 
-            // Teclado
-            if (keysPressed['q']) targetToolOffset.y += stepMoveSpeed * deltaTime;
-            if (keysPressed['e']) targetToolOffset.y -= stepMoveSpeed * deltaTime;
+            if (!isWaitingForCam) {
+                stepIntroTime -= deltaTime;
 
-            // Móvil Proporcional 
-            if (isMobileDevice) {
-                targetToolOffset.y += mobileDisplacement * stepMoveSpeed * deltaTime;
-            }
-        }
-
-        // Rotación (Intercambio de ejes: C/V para Longitudinal, Z/X para Lateral)
-        if (canRotate) {
-            // Paso: ÁNGULO DE AVANCE (C/V - Longitudinal - Eje Z)
-            const isAvance = currentSimState === SIM_STATES.AVANCE || currentSimState >= SIM_STATES.WELDING;
-            if (isAvance) {
-                // Cancelar demostración si el usuario interactúa
-                if (keysPressed['c'] || keysPressed['v'] || (isMobileDevice && Math.abs(mobileDisplacement) > 0.1)) {
-                    avanceIntroTime = 0;
-                }
-
-                if (avanceIntroTime > 0) {
-                    avanceIntroTime -= deltaTime;
-                    // Oscilar suavemente entre -45 y 45 grados (PI/4)
-                    targetToolRotation.z = Math.sin(currentTime * 0.005) * (Math.PI / 4);
-                } else {
-                    // Manual: REVERTIDO: Invertido el sentido de rotación en Paso 2
-                    if (keysPressed['c']) targetToolRotation.z -= rotationSpeed * deltaTime;
-                    if (keysPressed['v']) targetToolRotation.z += rotationSpeed * deltaTime;
-                    
-                    if (isMobileDevice) {
-                        targetToolRotation.z -= mobileDisplacement * rotationSpeed * deltaTime;
+                if (currentSimState === SIM_STATES.POSITION) {
+                    // COREOGRAFÍA CONTINUA (Súper fluida)
+                    const elapsed = 4.0 - stepIntroTime;
+                    if (elapsed < 1.0) {
+                        targetDemoCycle = -0.5 * elapsed;
+                    } else if (elapsed < 3.2) {
+                        // Reducido a la mitad hacia la derecha (0.75 en lugar de 1.5)
+                        let t = (elapsed - 1.0) / 2.2;
+                        targetDemoCycle = -0.5 + (1.25 * t); 
+                    } else {
+                        // Retorno desde 0.75 al centro
+                        let t = Math.min(1.0, (elapsed - 3.2) / 0.8);
+                        targetDemoCycle = 0.75 * (1.0 - t);
                     }
+
+                    // Mapeo directo para evitar lag
+                    targetToolOffset.x = targetDemoCycle;
+                    targetToolOffset.z = 0;
+                    
+                    // --- SEGUIMIENTO DE CÁMARA POR PIVOTE (No marea) ---
+                    // La cámara se queda fija en una posición y solo gira el "cuello" para seguir al electrodo
+                    const worldPos = new THREE.Vector3();
+                    currentTool.getWorldPosition(worldPos);
+                    
+                    targetLookAt.x = worldPos.x;
+                    targetCamPos.x = -0.625; // Posición fija para evitar mareo (panning)
+                    isCameraTransitioning = true; 
+
+                    // Forzar centro absoluto al terminar
+                    if (stepIntroTime < 0.05) {
+                        targetToolOffset.x = 0;
+                        smoothDemoInput = 0;
+                        // Volver a la vista de trabajo centrada al acabar
+                        targetCamPos.set(-0.625, 0.8, 2.5);
+                        targetLookAt.set(-0.625, 0.2, 0);
+                        isCameraTransitioning = true;
+                    }
+                    targetToolOffset.x = Math.max(-1.5, Math.min(1.5, targetToolOffset.x));
+
+                } else if (currentSimState === SIM_STATES.AVANCE || currentSimState === SIM_STATES.TRABAJO) {
+                    const elapsed = 4.0 - stepIntroTime;
+                    
+                    if (elapsed < 3.0) {
+                        // Fase 1 y 2: Movimiento coordinado de mando y electrodo
+                        if (elapsed < 1.5) {
+                            targetDemoCycle = -1.0; 
+                        } else {
+                            let t = Math.min(1.0, (elapsed - 1.5) / 1.5);
+                            targetDemoCycle = -1.0 + (1.8333 * t); // Llega a 0.8333 (45º)
+                        }
+
+                        // Sincronización de rotación (corrigiendo el sentido para TRABAJO)
+                        if (currentSimState === SIM_STATES.AVANCE) {
+                            targetToolRotation.z = -smoothDemoInput * (Math.PI * 0.3); // Avance: Signo negativo
+                        } else {
+                            targetToolRotation.x = smoothDemoInput * (Math.PI * 0.3);  // Trabajo: Signo positivo (CORREGIDO)
+                        }
+                    } else {
+                        // Fase 3: BLOQUEO DE ELECTRODO EN 45º Y RETORNO DE SLICER A 0
+                        targetDemoCycle = 0;
+                        if (currentSimState === SIM_STATES.AVANCE) {
+                            targetToolRotation.z = -(Math.PI / 4); 
+                        } else {
+                            targetToolRotation.x = (Math.PI / 4); // Lado correcto y sincronizado
+                        }
+                    }
+
+                    // El smoothDemoInput siempre persigue al target
+                    const angleLerp = 6.0;
+                    smoothDemoInput += (targetDemoCycle - smoothDemoInput) * angleLerp * deltaTime;
+
+                    // Limpieza final: Forzar valores exactos al terminar
+                    if (stepIntroTime < 0.1) {
+                        if (currentSimState === SIM_STATES.AVANCE) {
+                            targetToolRotation.z = -(Math.PI / 4);
+                        } else {
+                            targetToolRotation.x = (Math.PI / 4);
+                        }
+                        smoothDemoInput = 0; 
+                    }
+                    
+                } else if (currentSimState === SIM_STATES.DISTANCE || currentSimState === SIM_STATES.READY) {
+                    targetDemoCycle = Math.sin(currentTime * 0.002); // Oscilación de altura
+                    targetToolOffset.y = 0.03 + (smoothDemoInput + 1) * 0.03; 
+                    if (currentSimState === SIM_STATES.READY) {
+                        // En READY también movemos un poco el eje X para demostrar el slider
+                        targetToolOffset.x = smoothDemoInput * 0.5; 
+                    }
+                }
+
+                // SUAVIZAR EL INPUT DE LA DEMO (Reduced for fluidity)
+                const demoLerp = 2.0; 
+                smoothDemoInput += (targetDemoCycle - smoothDemoInput) * demoLerp * deltaTime;
+
+                // SINCRONIZAR UI DIRECTAMENTE CON EL ELECTRODO
+                if (ui.joystickKnob && ui.universalJoystick) {
+                    const trackWidth = ui.universalJoystick.clientWidth || 300;
+                    const knobWidth = ui.joystickKnob.clientWidth || 50;
+                    const mPath = (trackWidth - knobWidth) / 2;
+                    
+                    if (mPath > 0) {
+                        ui.joystickKnob.style.transition = 'none';
+                        let uiOffset = smoothDemoInput; 
+                        
+                        if (currentSimState === SIM_STATES.POSITION) {
+                            // Sincronización 1:1 con la posición real (máximo 1.5)
+                            uiOffset = targetToolOffset.x / 1.5; 
+                        } else if (currentSimState === SIM_STATES.AVANCE || currentSimState === SIM_STATES.TRABAJO) {
+                            // En ángulos, el joystick sigue al ciclo suavizado directamente
+                            uiOffset = smoothDemoInput;
+                        }
+
+                        ui.joystickKnob.style.transform = `translateX(${uiOffset * mPath}px)`;
+                    }
+                }
+
+                if (ui.sliderVert) {
+                    ui.sliderVert.value = (targetToolOffset.y * 10).toFixed(3);
+                }
+                if (ui.sliderLong) {
+                    ui.sliderLong.value = targetToolOffset.x.toFixed(3);
+                }
+            }
+        } else {
+            // --- CONTROL MANUAL ---
+            if (canMoveH) {
+                if (currentSimState === SIM_STATES.WELDING && isWelding) {
+                    targetToolOffset.x += BASE_WELD_SPEED * weldSpeedMultiplier * deltaTime;
+                    targetToolOffset.x = Math.min(1.25, targetToolOffset.x);
+                } else if (currentSimState !== SIM_STATES.WELDING) {
+                    if (keysPressed['a']) targetToolOffset.x -= moveSpeed * deltaTime;
+                    if (keysPressed['d']) targetToolOffset.x += moveSpeed * deltaTime;
+                    if (keysPressed['w']) targetToolOffset.z -= moveSpeed * deltaTime;
+                    if (keysPressed['s']) targetToolOffset.z += moveSpeed * deltaTime;
                 }
             }
             
-            // Paso: ÁNGULO DE TRABAJO (Z/X - Lateral - Eje X)
-            const isTrabajo = currentSimState === SIM_STATES.TRABAJO || currentSimState >= SIM_STATES.WELDING;
-            if (isTrabajo) {
-                if (keysPressed['z']) targetToolRotation.x += rotationSpeed * deltaTime;
-                if (keysPressed['x']) targetToolRotation.x -= rotationSpeed * deltaTime;
+            if (canMoveV) {
+                const sensitivity = (currentSimState === SIM_STATES.DISTANCE || currentSimState === SIM_STATES.READY) ? 0.05 : 0.5; 
+                const sMoveSpeed = moveSpeed * sensitivity;
+                if (keysPressed['q']) targetToolOffset.y += sMoveSpeed * deltaTime;
+                if (keysPressed['e']) targetToolOffset.y -= sMoveSpeed * deltaTime;
+            }
 
-                // Móvil Proporcional
-                if (isMobileDevice) {
-                    targetToolRotation.x += mobileDisplacement * rotationSpeed * deltaTime;
+            if (canRotate) {
+                if (currentSimState === SIM_STATES.AVANCE || currentSimState >= SIM_STATES.WELDING) {
+                    if (keysPressed['c']) targetToolRotation.z -= rotationSpeed * deltaTime;
+                    if (keysPressed['v']) targetToolRotation.z += rotationSpeed * deltaTime;
+                }
+                if (currentSimState === SIM_STATES.TRABAJO || currentSimState >= SIM_STATES.WELDING) {
+                    if (keysPressed['z']) targetToolRotation.x += rotationSpeed * deltaTime;
+                    if (keysPressed['x']) targetToolRotation.x -= rotationSpeed * deltaTime;
+                }
+            }
+
+            // --- MOBILE INPUT (Drives corresponding property) ---
+            if (isMobileDevice && Math.abs(mobileDisplacement) > 0.01) {
+                if (currentSimState === SIM_STATES.POSITION) targetToolOffset.x += mobileDisplacement * moveSpeed * deltaTime;
+                else if (currentSimState === SIM_STATES.AVANCE) targetToolRotation.z -= mobileDisplacement * rotationSpeed * deltaTime;
+                else if (currentSimState === SIM_STATES.TRABAJO) targetToolRotation.x += mobileDisplacement * rotationSpeed * deltaTime;
+                else if (currentSimState === SIM_STATES.DISTANCE || currentSimState === SIM_STATES.READY) {
+                    const s = currentSimState === SIM_STATES.DISTANCE ? 0.05 : 0.5;
+                    targetToolOffset.y += mobileDisplacement * moveSpeed * s * deltaTime;
                 }
             }
         }
+
+        // (El manejo de stepIntroTime e isInteracting se movió al principio del loop para evitar deadlocks)
+
 
         // --- LÍMITES DE ROTACIÓN ...
 
@@ -1038,8 +1234,8 @@ function animate() {
         
         // 1. Límites generales (no atravesar la mesa/placa base)
         toolRotation.x = Math.max(-maxTilt, Math.min(maxTilt, toolRotation.x));
-        // Límite Paso 2: Permitir oscilación de ±45 grados (longitudinal)
-        toolRotation.z = Math.max(-Math.PI/4, Math.min(Math.PI/4, toolRotation.z)); 
+        // Límite Paso 2: Permitir oscilación amplia (hasta 70 grados = 160 acumulado)
+        toolRotation.z = Math.max(-Math.PI*0.4, Math.min(Math.PI*0.4, toolRotation.z)); 
         
 
         // 2. Límites específicos por geometría (Unión en T)
@@ -1091,23 +1287,22 @@ function animate() {
         
         // Validación Paso 1: Posicionamiento inicial
         if (currentSimState === SIM_STATES.POSITION) {
-            // Dinámica de cámara: Zoom y elevación (45°) según proximidad
             const targetX = -1.25;
             const distToTarget = Math.abs(worldTip.x - targetX);
             const progress = Math.max(0, Math.min(1, 1 - (distToTarget / 1.25)));
             
-            // Interpolar objetivos de cámara
-            targetLookAt.set(
-                -0.625 + (targetX - (-0.625)) * progress,
-                0.2 + (0.1 - 0.2) * progress,
-                0
-            );
-            targetCamPos.set(
-                -0.625 + (targetX - (-0.625)) * progress,
-                0.8, // Mantenemos altura consistente
-                2.5 + (0.7 - 2.5) * progress // El zoom (Z) se reduce para alcanzar los 45° (H=0.7, Z=0.7)
-            );
-            isCameraTransitioning = true; // Forzar seguimiento continuo
+            // Si la demo está activa y aún no ha llegado, forzamos la ida al punto de inicio
+            if (stepIntroTime > 0 && isWaitingForCam) {
+                targetCamPos.set(-0.625, 0.8, 2.5);
+                targetLookAt.set(-0.625, 0.2, 0);
+                isCameraTransitioning = true; 
+            } else if (stepIntroTime <= 0) {
+                // Si el usuario toca el slicer o termina la demo, seguimiento dinámico
+                const halfway = (worldTip.x + targetX) / 2;
+                targetLookAt.set(halfway, 0.2 + (0.1 - 0.2) * progress, 0);
+                targetCamPos.set(halfway, 0.8, 2.5 + (0.7 - 2.5) * progress);
+                isCameraTransitioning = true; 
+            }
 
             const marker = scene.getObjectByName("start-marker");
             if (marker) {
@@ -1335,11 +1530,10 @@ function animate() {
                         electrodeRot = currentTool.rotation.x; 
                         currentAngle = Math.abs(electrodeRot);
                     } else {
-                        // Paso 2: ÁNGULO DE AVANCE - Optimizado a 80º (10º desde vertical)
-                        idealAngle = 0.1745; // 10 grados exactos (90-80 = 10)
+                        // Paso 2: ÁNGULO DE AVANCE - 80º desde la pieza (+X)
+                        idealAngle = Math.PI * 80 / 180; 
                         electrodeRot = currentTool.rotation.z; 
-                        currentAngle = Math.abs(electrodeRot);
-
+                        currentAngle = (Math.PI / 2) + electrodeRot; // 90 + z
                     }
     
                     if (angleIndicator.visible) {
@@ -1375,8 +1569,17 @@ function animate() {
                         const refLinePlate = angleIndicator.userData.refLinePlate;
                         arcContainer.clear();
                         
-                        const rotSign = Math.sign(electrodeRot) || -1; // -1 por defecto (lado derecho)
-                        const sideMultiplier = -rotSign; // Invertir para que coincida con el eje visual
+                        let sideMultiplier = 1;
+                        let angleFromPlate = 0;
+
+                        if (isAvance) {
+                            sideMultiplier = 1; // Bloqueado al lado derecho (hacia donde va la pieza)
+                            angleFromPlate = currentAngle;
+                        } else {
+                            const rotSign = Math.sign(electrodeRot) || -1;
+                            sideMultiplier = -rotSign;
+                            angleFromPlate = Math.PI / 2 - Math.abs(electrodeRot);
+                        }
                         
                         // Reposicionar barra de la chapa dinámicamente
                         if (refLinePlate) {
@@ -1384,7 +1587,6 @@ function animate() {
                         }
 
                         // El ángulo visual del arco es desde la horizontal (0) hasta el electrodo
-                        const angleFromPlate = Math.PI/2 - Math.abs(electrodeRot);
                         const absArcAngle = Math.max(0.01, angleFromPlate);
                         
                         const torusGeom = new THREE.TorusGeometry(0.4, 0.01, 8, 30, absArcAngle);
@@ -1482,19 +1684,7 @@ function animate() {
             });
         }
 
-        // Suavizado de cámara (Glide logic)
-        if (isCameraTransitioning && camera && targetCamPos && targetLookAt) {
-            camera.position.lerp(targetCamPos, 0.05);
-            if (controls) {
-                controls.target.lerp(targetLookAt, 0.05);
-            }
-            
-            // Detener el planeo si estamos muy cerca del objetivo
-            const dPos = camera.position.distanceTo(targetCamPos);
-            if (dPos < 0.01) {
-                isCameraTransitioning = false;
-            }
-        }
+        // (La lógica de Glide de cámara se movió al inicio del animate para asegurar ejecución constante)
 
         } // Fin if (currentTool)
 
