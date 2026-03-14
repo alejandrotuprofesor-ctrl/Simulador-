@@ -23,11 +23,12 @@ let rotationSpeed = 1.0;
 let lastBeadPos = new THREE.Vector3(100, 100, 100);
 let idealWeldX = -1.25; // Punto de inicio de la soldadura (longitudinal)
 let weldSpeedMultiplier = 0;
+let avanceIntroTime = 0; // Para animación automática en Paso 2
 const BASE_WELD_SPEED = 0.04; // Velocidad real aproximada (unidades/segundo)
 
 let arcLight, arcGlare, sparkParticles;
 let beadContainer;
-let angleIndicator, angleLabel, distanceIndicator;
+let angleIndicator, angleLabel, distanceIndicator, genialLabel;
 
 // Cámara gliding
 let isCameraTransitioning = false;
@@ -87,9 +88,10 @@ function initUI() {
 
     if (ui.btnStart) {
         ui.btnStart.addEventListener('click', (e) => {
+            ui.btnStart.classList.remove('cta-animate');
             console.log("Start button clicked (addEventListener)!");
             startApp();
-        }, true); // Use capture phase to ensure it's hit
+        }, true);
         
         // Mobile fallback
         ui.btnStart.addEventListener('touchstart', (e) => {
@@ -114,8 +116,15 @@ function initUI() {
         ui.btnStartWeld.addEventListener('touchend', () => isWeldButtonPressed = false);
     }
 
+    if (ui.btnNextStep) {
+        ui.btnNextStep.addEventListener('click', () => {
+            ui.btnNextStep.classList.remove('cta-animate');
+        });
+    }
+
     if (ui.sliderLong) {
         ui.sliderLong.addEventListener('input', (e) => {
+            ui.sliderLong.classList.remove('cta-animate-slide');
             if (currentSimState === SIM_STATES.WELDING) {
                 // Durante la soldadura, controla la velocidad (0 a 4x)
                 // El slider está mapeado de 0 a 1 en el HTML durante el paso WELDING
@@ -128,6 +137,7 @@ function initUI() {
 
     if (ui.sliderVert) {
         ui.sliderVert.addEventListener('input', (e) => {
+            ui.sliderVert.classList.remove('cta-animate-slide');
             // Geared down 10x: 10 units on slider = 1 units in simulation
             targetToolOffset.y = parseFloat(e.target.value) / 10;
         });
@@ -172,6 +182,12 @@ function setSimState(newState) {
     targetToolOffset.z = toolOffset.z;
     targetToolRotation.x = toolRotation.x;
     targetToolRotation.z = toolRotation.z;
+    
+    // Resetear visibilidad de indicadores al cambiar de pantalla
+    if (angleIndicator) angleIndicator.visible = false;
+    if (angleLabel) angleLabel.visible = false;
+    if (genialLabel) genialLabel.visible = false;
+    if (distanceIndicator) distanceIndicator.visible = false;
 
     const pieceContainer = scene ? scene.getObjectByName("piece-container") : null;
     const isT = pieceContainer?.userData.isTJoint;
@@ -184,11 +200,13 @@ function setSimState(newState) {
 
     switch(newState) {
         case SIM_STATES.START:
-            updateHud("INICIO", isMobileDevice ? 
+            updateHud("", isMobileDevice ? 
                 "<b>Selecciona para continuar</b>" : 
                 "<b>Selecciona los parámetros</b>");
+
             ui.btnNextStep.style.display = 'block';
             ui.btnNextStep.textContent = "UBICAR ELECTRODO";
+            ui.btnNextStep.classList.add('cta-animate');
             if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VER PROCESOS"; 
             ui.btnStartWeld.style.display = 'none';
             targetCamPos.set(4, 3, 4);
@@ -197,23 +215,27 @@ function setSimState(newState) {
 
         case SIM_STATES.POSITION:
             updateHud("Paso 1: Ubicación", isMobileDevice ?
-                "<b>Mueve el electrodo</b> hacia el círculo amarillo." :
+                "<b>Mueve el electrodo</b> hacia el círculo verde." :
                 "Usa <b>A, S, D, W</b> para ubicar el electrodo en el inicio.");
             
-            if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
+            if (isMobileDevice && ui.mobileControls) {
+                ui.mobileControls.style.display = 'flex';
+                if (ui.joystickKnob) ui.joystickKnob.classList.add('cta-animate-slide');
+            }
 
             ui.btnNextStep.style.display = 'none'; 
             ui.btnNextStep.textContent = "SIGUIENTE: ÁNGULO AVANCE";
             if (ui.btnResultsBack) ui.btnResultsBack.textContent = "VOLVER"; 
             ui.btnStartWeld.style.display = 'none';
-            targetCamPos.set(1.5, 1.5, 1.5);
-            targetLookAt.set(-1.25, 0.4, 0);
+            targetCamPos.set(-0.625, 0.8, 2.5); // Frontal view centered on midpoint
+            targetLookAt.set(-0.625, 0.2, 0);   // Looking at the midpoint between Start (0) and Marker (-1.25)
             break;
 
         case SIM_STATES.AVANCE:
+            avanceIntroTime = 3.0; // Demostración de -45 a 45 grados
             updateHud("Paso 2: Ángulo de Avance", isMobileDevice ?
                 "Ajusta la <b>inclinación longitudinal</b>." :
-                "Usa <b>C</b> y <b>V</b> para inclinar el electrodo (15°).");
+                "Usa <b>C</b> y <b>V</b> para inclinar el electrodo (80°).");
             
             if (isMobileDevice && ui.mobileControls) ui.mobileControls.style.display = 'flex';
             
@@ -259,9 +281,15 @@ function setSimState(newState) {
             ui.btnStartWeld.style.display = 'none'; 
             if (ui.weldingSliders) ui.weldingSliders.style.display = 'flex';
             
-            // Sincronizar sliders con posición actual
-            if (ui.sliderLong) ui.sliderLong.value = toolOffset.x.toFixed(3);
-            if (ui.sliderVert) ui.sliderVert.value = (toolOffset.y * 10).toFixed(3);
+            // Sincronizar sliders con posición actual y animar como CTA
+            if (ui.sliderLong) {
+                ui.sliderLong.value = toolOffset.x.toFixed(3);
+                ui.sliderLong.classList.add('cta-animate-slide');
+            }
+            if (ui.sliderVert) {
+                ui.sliderVert.value = (toolOffset.y * 10).toFixed(3);
+                ui.sliderVert.classList.add('cta-animate-slide');
+            }
             
             targetCamPos.set(3, 2, 3); // Vista completa
             targetLookAt.set(0, 0.4, 0);
@@ -282,7 +310,11 @@ function setSimState(newState) {
                 ui.sliderLong.max = "1";
                 ui.sliderLong.step = "0.01";
                 ui.sliderLong.value = "0";
+                ui.sliderLong.classList.add('cta-animate-slide'); // Re-animate for new mode
                 weldSpeedMultiplier = 0;
+            }
+            if (ui.sliderVert) {
+                ui.sliderVert.classList.add('cta-animate-slide');
             }
             
             // Reiniciar posición ideal de soldadura
@@ -308,7 +340,10 @@ function setSimState(newState) {
 }
 
 function updateHud(title, desc) {
-    if (ui.instrTitle) ui.instrTitle.textContent = title;
+    if (ui.instrTitle) {
+        ui.instrTitle.textContent = title;
+        ui.instrTitle.style.display = title ? 'block' : 'none';
+    }
     if (ui.instrDesc) {
         ui.instrDesc.innerHTML = desc;
         ui.instrDesc.dataset.base = desc; // Store for dynamic swapping
@@ -373,12 +408,12 @@ function init() {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
     
-    // Luces de acento (neón sutil)
-    const pointLight1 = new THREE.PointLight(0x00f3ff, 5, 50); // Reducido de 20 a 5
+    // Luces de acento (neón sutil - reducidas para no teñir objetos)
+    const pointLight1 = new THREE.PointLight(0x00f3ff, 2, 50); 
     pointLight1.position.set(5, 5, 5);
     scene.add(pointLight1);
     
-    const pointLight2 = new THREE.PointLight(0xbc13fe, 3, 50); // Reducido de 15 a 3
+    const pointLight2 = new THREE.PointLight(0xbc13fe, 1.5, 50); 
     pointLight2.position.set(-5, 2, -5);
     scene.add(pointLight2);
     
@@ -523,6 +558,11 @@ function showSummary() {
     });
 
     update3DModel();
+    
+    // Show scene when simulation starts
+    if (renderer && renderer.domElement) {
+        renderer.domElement.style.opacity = '1';
+    }
     
     // Iniciar HUD de simulación
     if (ui.simHud) {
@@ -676,7 +716,12 @@ function update3DModel() {
     // El pivote (0,0,0) del grupo será la punta del electrodo
     // Escala: 1 unit = 100mm. Diam: 3.25mm -> R: 0.01625. Largo: 350mm -> H: 3.5
     const electrodeGeom = new THREE.CylinderGeometry(0.01625, 0.01625, 3.5, 12);
-    const electrodeMesh = new THREE.Mesh(electrodeGeom, logoBlueMat);
+    const brownMat = new THREE.MeshStandardMaterial({ 
+        color: 0xA67B5B, // Marrón cuero/arcilla más saturado
+        roughness: 1.0,   // Sin reflejos
+        metalness: 0.0   // No metálico
+    });
+    const electrodeMesh = new THREE.Mesh(electrodeGeom, brownMat);
     electrodeMesh.position.y = 1.75; // La punta inferior en 0 (Largo/2)
     toolGroup.add(electrodeMesh);
 
@@ -780,20 +825,47 @@ function update3DModel() {
     
     // 2. Etiqueta de Texto (Canvas Texture)
 
-    // 2. Etiqueta de Texto (Canvas Texture)
+    // 2. Etiqueta de Texto (Cota de grados)
     const labelCanvas = document.createElement('canvas');
-    labelCanvas.width = 256; labelCanvas.height = 64;
+    labelCanvas.width = 512; labelCanvas.height = 128; // Doble de ancho para frases largas
     const lctx = labelCanvas.getContext('2d');
-    lctx.font = 'Bold 40px Inter, Arial';
+    
+    // El fondo se dibujará dinámicamente en el bucle
+
+    lctx.font = 'Bold 55px Inter, Arial';
     lctx.textAlign = 'center';
-    lctx.fillStyle = '#00ff00'; // Verde como el marcador
-    lctx.fillText('Perfecto!', 128, 45); // Añadido !
+    lctx.fillStyle = '#00ff00'; 
+    lctx.fillText('Genial', 128, 85); 
+    
     const labelTex = new THREE.CanvasTexture(labelCanvas);
-    const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
+    const labelMat = new THREE.SpriteMaterial({ 
+        map: labelTex, 
+        transparent: true,
+        depthTest: false,
+        depthWrite: false
+    });
     angleLabel = new THREE.Sprite(labelMat);
-    angleLabel.scale.set(0.5, 0.125, 1);
+    angleLabel.renderOrder = 1000;
+    angleLabel.scale.set(0.6, 0.3, 1);
     angleLabel.visible = false;
     scene.add(angleLabel);
+
+    // Etiqueta "Genial" independiente para el paso 1
+    const genialCanvas = document.createElement('canvas');
+    genialCanvas.width = 256; genialCanvas.height = 128;
+    const genialCtx = genialCanvas.getContext('2d');
+    genialCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    genialCtx.beginPath(); genialCtx.roundRect(10, 20, 236, 88, 20); genialCtx.fill();
+    genialCtx.strokeStyle = '#00ff00'; genialCtx.lineWidth = 4; genialCtx.stroke();
+    genialCtx.font = 'Bold 48px Inter, Arial'; genialCtx.textAlign = 'center'; genialCtx.fillStyle = '#00ff00';
+    genialCtx.fillText('Perfecto', 128, 85);
+    const genialTex = new THREE.CanvasTexture(genialCanvas);
+    const genialMat = new THREE.SpriteMaterial({ map: genialTex, transparent: true, depthTest: false, depthWrite: false });
+    genialLabel = new THREE.Sprite(genialMat);
+    genialLabel.renderOrder = 1001;
+    genialLabel.scale.set(0.6, 0.3, 1);
+    genialLabel.visible = false;
+    scene.add(genialLabel);
 
     // 3. Guía de Distancia (Cota)
     distanceIndicator = new THREE.Group();
@@ -926,13 +998,23 @@ function animate() {
             // Paso: ÁNGULO DE AVANCE (C/V - Longitudinal - Eje Z)
             const isAvance = currentSimState === SIM_STATES.AVANCE || currentSimState >= SIM_STATES.WELDING;
             if (isAvance) {
-                // REVERTIDO: Invertido el sentido de rotación en Paso 2
-                if (keysPressed['c']) targetToolRotation.z -= rotationSpeed * deltaTime;
-                if (keysPressed['v']) targetToolRotation.z += rotationSpeed * deltaTime;
-                
-                // Móvil Proporcional
-                if (isMobileDevice) {
-                    targetToolRotation.z -= mobileDisplacement * rotationSpeed * deltaTime;
+                // Cancelar demostración si el usuario interactúa
+                if (keysPressed['c'] || keysPressed['v'] || (isMobileDevice && Math.abs(mobileDisplacement) > 0.1)) {
+                    avanceIntroTime = 0;
+                }
+
+                if (avanceIntroTime > 0) {
+                    avanceIntroTime -= deltaTime;
+                    // Oscilar suavemente entre -45 y 45 grados (PI/4)
+                    targetToolRotation.z = Math.sin(currentTime * 0.005) * (Math.PI / 4);
+                } else {
+                    // Manual: REVERTIDO: Invertido el sentido de rotación en Paso 2
+                    if (keysPressed['c']) targetToolRotation.z -= rotationSpeed * deltaTime;
+                    if (keysPressed['v']) targetToolRotation.z += rotationSpeed * deltaTime;
+                    
+                    if (isMobileDevice) {
+                        targetToolRotation.z -= mobileDisplacement * rotationSpeed * deltaTime;
+                    }
                 }
             }
             
@@ -956,8 +1038,8 @@ function animate() {
         
         // 1. Límites generales (no atravesar la mesa/placa base)
         toolRotation.x = Math.max(-maxTilt, Math.min(maxTilt, toolRotation.x));
-        // Límite Paso 2: No pasar de 90 grados (vertical) en Ángulo de Avance
-        toolRotation.z = Math.max(-maxTilt, Math.min(0, toolRotation.z)); 
+        // Límite Paso 2: Permitir oscilación de ±45 grados (longitudinal)
+        toolRotation.z = Math.max(-Math.PI/4, Math.min(Math.PI/4, toolRotation.z)); 
         
 
         // 2. Límites específicos por geometría (Unión en T)
@@ -1009,36 +1091,56 @@ function animate() {
         
         // Validación Paso 1: Posicionamiento inicial
         if (currentSimState === SIM_STATES.POSITION) {
+            // Dinámica de cámara: Zoom y elevación (45°) según proximidad
+            const targetX = -1.25;
+            const distToTarget = Math.abs(worldTip.x - targetX);
+            const progress = Math.max(0, Math.min(1, 1 - (distToTarget / 1.25)));
+            
+            // Interpolar objetivos de cámara
+            targetLookAt.set(
+                -0.625 + (targetX - (-0.625)) * progress,
+                0.2 + (0.1 - 0.2) * progress,
+                0
+            );
+            targetCamPos.set(
+                -0.625 + (targetX - (-0.625)) * progress,
+                0.8, // Mantenemos altura consistente
+                2.5 + (0.7 - 2.5) * progress // El zoom (Z) se reduce para alcanzar los 45° (H=0.7, Z=0.7)
+            );
+            isCameraTransitioning = true; // Forzar seguimiento continuo
+
             const marker = scene.getObjectByName("start-marker");
             if (marker) {
                 // Efecto de RESPIRACIÓN en el marcador
                 const breathe = 1.0 + Math.sin(currentTime * 0.005) * 0.2;
-                marker.scale.set(breathe, breathe, 1);
+                // marker.scale.set(breathe, breathe, 1); // Movido a la lógica de distancia
                 
                 const markerPos = new THREE.Vector3();
                 marker.getWorldPosition(markerPos);
                 const distH = new THREE.Vector2(worldTip.x, worldTip.z).distanceTo(new THREE.Vector2(markerPos.x, markerPos.z));
                 
                 if (distH < 0.08) {
+                    marker.scale.set(1.1, 1.1, 1);
                     if (ui.btnNextStep.style.display === 'none') {
                         ui.btnNextStep.style.display = 'block';
+                        ui.btnNextStep.classList.add('cta-animate');
                         ui.instrDesc.innerHTML = "<b>¡Punto encontrado!</b> Haz clic para continuar.";
                     }
-                    if (angleLabel) {
-                        angleLabel.visible = true;
-                        // Posición a la izquierda (-X) y un poco elevado (+Y)
-                        angleLabel.position.copy(worldTip).add(new THREE.Vector3(-0.35, 0.25, 0));
-                        // Aplicar el mismo efecto de respiración que al marcador
-                        const labelBreathe = 0.6 * breathe; 
-                        angleLabel.scale.set(labelBreathe, labelBreathe * 0.25, 1);
-                        angleLabel.quaternion.copy(camera.quaternion);
+                    if (genialLabel) {
+                        genialLabel.visible = true;
+                        // Posicionar encima del marcador, bien despejado hacia el usuario
+                        genialLabel.position.set(markerPos.x, 0.4, markerPos.z + 0.2);
+                        const labelScale = 0.2;
+                        genialLabel.scale.set(labelScale, labelScale * 0.5, 1);
+                        genialLabel.quaternion.copy(camera.quaternion);
                     }
                 } else {
+                    marker.scale.set(breathe, breathe, 1);
                     if (ui.btnNextStep.style.display === 'block') {
                         ui.btnNextStep.style.display = 'none';
                         ui.instrDesc.innerHTML = ui.instrDesc.dataset.base;
                     }
-                    if (angleLabel) angleLabel.visible = false;
+                    if (genialLabel) genialLabel.visible = false;
                 }
             }
         }
@@ -1157,6 +1259,7 @@ function animate() {
                     if (isPerfect) {
                         if (ui.btnNextStep.style.display === 'none') {
                             ui.btnNextStep.style.display = 'block';
+                            ui.btnNextStep.classList.add('cta-animate');
                             ui.instrDesc.innerHTML = "<b>¡Separación ideal!</b> Pulsa para ir al inicio.";
                         }
                     } else {
@@ -1232,27 +1335,23 @@ function animate() {
                         electrodeRot = currentTool.rotation.x; 
                         currentAngle = Math.abs(electrodeRot);
                     } else {
-                        // Paso 2: ÁNGULO DE AVANCE
-                        idealAngle = 0.2618; // 15 grados exactos
+                        // Paso 2: ÁNGULO DE AVANCE - Optimizado a 80º (10º desde vertical)
+                        idealAngle = 0.1745; // 10 grados exactos (90-80 = 10)
                         electrodeRot = currentTool.rotation.z; 
                         currentAngle = Math.abs(electrodeRot);
 
-                        // RESTRICCIÓN: Solo mostrar cota si inclina a la DERECHA del electrodo (negativo en Z)
-                        // Si inclina a la izquierda (> 0), ocultamos el indicador
-                        if (electrodeRot > 0) {
-                            angleIndicator.visible = false;
-                            if (angleLabel) angleLabel.visible = false;
-                        }
                     }
     
                     if (angleIndicator.visible) {
                         const diff = Math.abs(currentAngle - idealAngle);
-                        const isPerfectAngle = diff < 0.05; // ~3 grados de tolerancia
+                        // Tolerancia de 2 grados (0.035 rad) para el rango 78-82 respecto a 80
+                        const isPerfectAngle = diff < 0.035; 
                         
                         // Lógica de HUD dinámico para Ángulos
                         if (isPerfectAngle) {
                             if (ui.btnNextStep.style.display === 'none') {
                                 ui.btnNextStep.style.display = 'block';
+                                ui.btnNextStep.classList.add('cta-animate');
                                 ui.instrDesc.innerHTML = isAvance ? 
                                     "<b>¡Ángulo de avance correcto!</b> Pulsa para el siguiente." :
                                     "<b>¡Ángulo de trabajo correcto!</b> Pulsa para continuar.";
@@ -1304,28 +1403,45 @@ function animate() {
                             
                             // CALCULAR POSICIÓN CENTRADA EN EL ARCO
                             const midAngle = angleFromPlate / 2;
-                            const labelRadius = 0.55; // Radio ligeramente mayor que el arco (0.4)
+                            const labelRadius = 0.55; 
                             
-                            // Vector local relativo al pivote de la cota
                             const lx = Math.cos(midAngle) * labelRadius * sideMultiplier;
                             const ly = Math.sin(midAngle) * labelRadius;
-                            const localPos = new THREE.Vector3(lx, ly, 0);
+                            const localPos = new THREE.Vector3(lx, ly, 0.1); // Slightly forward
                             
-                            // Aplicar la rotación actual de la cota para que el label siga el movimiento
                             localPos.applyQuaternion(angleIndicator.quaternion);
-                            
                             angleLabel.position.copy(worldTip).add(localPos);
                             angleLabel.scale.set(0.6, 0.15, 1);
                             angleLabel.quaternion.copy(camera.quaternion);
 
-                            // El texto muestra el ángulo respectivo a la chapa
+                            // Lógica de dibujo dinámico para ajustar la celda al texto
                             const displayDegrees = (angleFromPlate * 180 / Math.PI).toFixed(1);
-                            const labelCtx = angleLabel.material.map.image.getContext('2d');
-                            labelCtx.clearRect(0,0,256,64);
-                            labelCtx.fillStyle = `#${indicatorColor.getHexString()}`;
-                            labelCtx.textAlign = 'center';
-                            labelCtx.font = 'Bold 44px Inter, Arial';
-                            labelCtx.fillText(`${displayDegrees}°`, 128, 45);
+                            const labelText = isPerfectAngle ? `${displayDegrees}° Perfecto` : `${displayDegrees}°`;
+                            
+                            const ctx = angleLabel.material.map.image.getContext('2d');
+                            ctx.clearRect(0,0,512,128); // Limpiar el lienzo (ahora de 512)
+                            ctx.font = 'Bold 55px Inter, Arial';
+                            const textWidth = ctx.measureText(labelText).width;
+                            const boxWidth = textWidth + 80; // Padding generoso
+                            const boxX = (512 - boxWidth) / 2; // Centrar en el lienzo de 512
+                            
+                            const hexColor = `#${indicatorColor.getHexString()}`;
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                            ctx.beginPath(); 
+                            ctx.roundRect(boxX, 20, boxWidth, 88, 20); 
+                            ctx.fill();
+                            ctx.strokeStyle = hexColor; 
+                            ctx.lineWidth = 4; 
+                            ctx.stroke();
+                            
+                            ctx.fillStyle = hexColor;
+                            ctx.textAlign = 'center';
+                            ctx.fillText(labelText, 256, 85); // Centrar texto en el lienzo de 512
+                            
+                            // Ajustar la escala del Sprite para mantener proporciones en el mundo 3D
+                            const scaleX = 0.6 * (boxWidth / 256); 
+                            angleLabel.scale.set(scaleX, 0.15, 1);
+                            
                             angleLabel.material.map.needsUpdate = true;
                         }
                     }
@@ -1406,6 +1522,8 @@ function initJoystick() {
         currentMaxPath = (container.clientWidth - knob.clientWidth) / 2;
         startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
         knob.style.transition = 'none';
+        knob.classList.remove('cta-animate');
+        knob.classList.remove('cta-animate-slide');
     };
 
     const onMove = (e) => {

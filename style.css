@@ -34,6 +34,8 @@ canvas {
     left: 0;
     z-index: 1;
     display: block;
+    opacity: 0; /* Hide initially to prevent flicker */
+    transition: opacity 0.8s ease-in-out;
 }
 
 .glass-panel {
@@ -93,21 +95,23 @@ canvas {
 
 #result-screen .hud-instructions {
     position: absolute;
-    top: 38px; /* Moved even higher to stay pinned to the top bar */
+    top: 0px; 
     width: 95%; 
     max-width: 1000px;
-    padding: 2px 1rem 4px 1rem; /* Extremely narrow top padding */
+    padding: 0 !important; /* Forces zero padding everywhere initially */
+    padding-bottom: 4px !important; /* Some breathing room at bottom */
     pointer-events: auto;
     display: flex;
-    flex-direction: row; /* Horizontal layout */
-    align-items: flex-start; /* Pinned to top as requested */
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
-    text-align: left;
-    background: rgba(10, 10, 15, 0.6);
+    text-align: center;
+    background: rgba(10, 10, 15, 0.4); 
     backdrop-filter: blur(8px);
-    border: 1px solid var(--glass-border);
-    border-top: none; /* Seamless connection with top bar */
-    border-radius: 0 0 10px 10px; /* Only bottom rounded */
+    border: 1px solid rgba(0, 243, 255, 0.5); 
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    margin: 0 !important;
 }
 
 #result-screen #visual-summary {
@@ -305,11 +309,11 @@ canvas {
 }
 
 .summary-item {
-    background: rgba(255, 255, 255, 0.05);
-    border-top: 1px solid var(--neon-blue);
+    background: rgba(10, 10, 15, 0.6);
+    border: 1px solid rgba(0, 243, 255, 0.5); /* Full visible border */
     padding: 0.3rem 0.8rem;
     margin-bottom: 0;
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 10px 10px; /* Rounded bottom to match theme */
     flex: 0 0 auto;
     min-width: 100px;
     backdrop-filter: blur(10px);
@@ -347,8 +351,11 @@ canvas {
 
 #instr-title {
     font-size: 0.8rem;
-    margin: 0 0.5rem 0 0;
-    display: inline-block;
+    margin: 0 !important;
+    margin-bottom: 2px !important;
+    padding: 0 !important;
+    line-height: 1.2;
+    display: block;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--neon-purple);
@@ -357,8 +364,8 @@ canvas {
 
 #instr-desc {
     font-size: 0.75rem;
-    margin: 0;
-    display: inline-block;
+    margin: 0 !important;
+    display: block; /* Block for better centering */
     color: #eee;
 }
 
@@ -368,7 +375,7 @@ canvas {
     justify-content: center; /* Centered buttons as requested */
     align-items: center;
     margin-left: 2rem; /* Added space between instructions and buttons */
-    margin-top: 4px; /* Slight offset to look better with flex-start text */
+    margin-top: 10px; /* Increased from 4px to separate from text above */
 }
 
 #btn-next-step {
@@ -470,6 +477,14 @@ canvas {
     border-radius: 50%;
     box-shadow: 0 0 15px var(--neon-blue);
     border: none;
+}
+
+/* Fluid side-to-side for standard slider thumbs */
+input[type=range].cta-animate-slide::-webkit-slider-thumb {
+    animation: cta-slide-x 1.2s infinite ease-in-out !important;
+}
+input[type=range].cta-animate-slide::-moz-range-thumb {
+    animation: cta-slide-x 1.2s infinite ease-in-out !important;
 }
 
 @keyframes slideUp {
@@ -609,4 +624,32 @@ body.is-mobile .mobile-only {
         opacity: 0.5;
         pointer-events: none;
     }
+}
+
+@keyframes cta-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 10px var(--neon-blue); }
+    50% { transform: scale(1.05); box-shadow: 0 0 30px var(--neon-blue), 0 0 50px rgba(0, 243, 255, 0.4); }
+    100% { transform: scale(1); box-shadow: 0 0 10px var(--neon-blue); }
+}
+
+@keyframes cta-slide-x {
+    0%, 100% { transform: translateX(-15px); }
+    50% { transform: translateX(15px); }
+}
+
+.cta-animate {
+    animation: cta-pulse 1.5s infinite ease-in-out !important;
+    border-color: var(--neon-blue) !important;
+    color: var(--neon-blue) !important;
+    z-index: 100;
+}
+
+.cta-animate-slide {
+    animation: cta-slide-x 1.2s infinite ease-in-out !important;
+    box-shadow: 0 0 30px var(--neon-blue) !important;
+    z-index: 100;
+}
+
+#joystick-knob.cta-animate, #joystick-knob.cta-animate-slide {
+    box-shadow: 0 0 20px var(--neon-blue) !important;
 }
